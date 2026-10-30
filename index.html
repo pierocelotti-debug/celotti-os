@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Celotti OS - Portal Operativo Teal</title>
+
+	<!-- METATAGS PWA PARA INSTALACIÓN EN TABLET DE PLANTA -->
+	<meta name="theme-color" content="#0f172a">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="Celotti OS">
+
+	<link rel="manifest" href="data:application/manifest+json;utf8,{
+	  %22name%22:%22Celotti%20OS%22,
+	  %22short_name%22:%22Celotti%20OS%22,
+	  %22start_url%22:%22/%22,
+	  %22display%22:%22standalone%22,
+	  %22background_color%22:%22%230f172a%22,
+	  %22theme_color%22:%22%2310b981%22,
+	  %22icons%22:[{
+		%22src%22:%22https://vpomzjwmmfudgiahrqlk.supabase.co/storage/v1/object/public/fotos_mejoras/icon-192.png%22,
+		%22sizes%22:%22192x192%22,
+		%22type%22:%22image/png%22
+	  }]
+	}">
+
+	<style>
+		:root {
+			--bg-dark: #0f172a;
+			--panel-bg: #1e293b;
+			--accent-teal: #10b981;
+			--text-main: #f8fafc;
+			--text-muted: #94a3b8;
+			--border-color: #334155;
+			--danger: #ef4444;
+			--warning: #f59e0b;
+		}
+		body {
+			margin: 0;
+			font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+			background-color: var(--bg-dark);
+			color: var(--text-main);
+			display: flex;
+			height: 100vh;
+			overflow: hidden;
+		}
+		.sidebar {
+			width: 260px;
+			background-color: #090d16;
+			border-right: 1px solid var(--border-color);
+			display: flex;
+			flex-direction: column;
+			padding: 20px;
+		}
+		.brand {
+			font-size: 1.25rem;
+			font-weight: 700;
+			color: var(--accent-teal);
+			margin-bottom: 30px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.nav-item {
+			padding: 12px 16px;
+			border-radius: 8px;
+			margin-bottom: 8px;
+			cursor: pointer;
+			color: var(--text-muted);
+			font-weight: 500;
+			transition: all 0.2s ease;
+		}
+		.nav-item:hover, .nav-item.active {
+			background-color: var(--panel-bg);
+			color: var(--accent-teal);
+		}
+		.main-content {
+			flex: 1;
+			padding: 32px;
+			overflow-y: auto;
+		}
+		.header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 20px;
+			padding-bottom: 16px;
+			border-bottom: 1px solid var(--border-color);
+		}
+
+		/* BARRA DE FILTROS */
+		.filter-bar {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 10px;
+			padding: 16px;
+			margin-bottom: 24px;
+			display: flex;
+			gap: 16px;
+			align-items: flex-end;
+			flex-wrap: wrap;
+		}
+		.filter-group {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.filter-group label {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			font-weight: 600;
+		}
+		input[type="date"], select, input[type="text"], textarea {
+			background: var(--bg-dark);
+			border: 1px solid var(--border-color);
+			color: var(--text-main);
+			padding: 8px 12px;
+			border-radius: 6px;
+			font-family: inherit;
+		}
+
+		/* PANELS Y KPIS */
+		.kpi-container {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 16px;
+			margin-bottom: 28px;
+		}
+		.kpi-card {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 10px;
+			padding: 16px;
+			text-align: center;
+		}
+		.kpi-title {
+			font-size: 0.8rem;
+			color: var(--text-muted);
+			font-weight: 600;
+			text-transform: uppercase;
+		}
+		.kpi-value {
+			font-size: 1.6rem;
+			font-weight: 700;
+			margin-top: 6px;
+		}
+
+		.grid-cards {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+			gap: 20px;
+		}
+		.card {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 10px;
+			padding: 20px;
+			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+			cursor: pointer;
+			transition: transform 0.2s, border-color 0.2s;
+		}
+		.card:hover {
+			transform: translateY(-2px);
+			border-color: var(--accent-teal);
+		}
+		.card-header {
+			font-weight: 700;
+			margin-bottom: 12px;
+			color: var(--accent-teal);
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+		}
+		.badge {
+			font-size: 0.75rem;
+			padding: 4px 8px;
+			border-radius: 4px;
+			background: var(--border-color);
+			font-weight: 600;
+		}
+		.badge-danger { background: var(--danger); color: #ffffff; }
+		.badge-warning { background: var(--warning); color: #000000; }
+		.badge-success { background: var(--accent-teal); color: #0f172a; }
+
+		/* ANALÍTICA DEFECTOS */
+		.chart-card {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 10px;
+			padding: 20px;
+		}
+		.defect-row { margin-bottom: 14px; }
+		.defect-label {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.85rem;
+			margin-bottom: 4px;
+		}
+		.progress-bar-bg {
+			background-color: var(--bg-dark);
+			border-radius: 6px;
+			height: 12px;
+			overflow: hidden;
+			width: 100%;
+		}
+		.progress-bar-fill {
+			background-color: var(--danger);
+			height: 100%;
+			border-radius: 6px;
+			transition: width 0.4s ease;
+		}
+
+		.btn {
+			background-color: var(--accent-teal);
+			color: #0f172a;
+			border: none;
+			padding: 10px 18px;
+			border-radius: 6px;
+			font-weight: 700;
+			cursor: pointer;
+			transition: opacity 0.2s;
+		}
+		.btn-danger { background-color: var(--danger); color: white; }
+		.btn:hover { opacity: 0.9; }
+
+		/* MODAL POP-UP */
+		.modal-overlay {
+			position: fixed;
+			top: 0; left: 0; width: 100vw; height: 100vh;
+			background: rgba(0, 0, 0, 0.75);
+			display: none;
+			justify-content: center;
+			align-items: center;
+			z-index: 1000;
+			backdrop-filter: blur(4px);
+		}
+		.modal-content {
+			background-color: var(--panel-bg);
+			border: 1px solid var(--border-color);
+			border-radius: 12px;
+			width: 90%;
+			max-width: 600px;
+			max-height: 90vh;
+			overflow-y: auto;
+			padding: 24px;
+			position: relative;
+		}
+		.modal-close {
+			position: absolute;
+			top: 15px; right: 20px;
+			font-size: 1.5rem;
+			cursor: pointer;
+			color: var(--text-muted);
+		}
+		.modal-img {
+			width: 100%;
+			max-height: 300px;
+			object-fit: cover;
+			border-radius: 8px;
+			margin: 15px 0;
+			border: 1px solid var(--border-color);
+		}
+	</style>
+</head>
+<body>
+
+	<div class="sidebar">
+		<div class="brand">🏭 CELOTTI OS</div>
+		<div class="nav-item active" onclick="switchTab('analitica')">📊 Analítica Desmolde</div>
+		<div class="nav-item" onclick="switchTab('calidad')">⚠️ Calidad & No Conf.</div>
+		<div class="nav-item" onclick="switchTab('mantenimiento')">🛠️ Mantenimiento</div>
+		<div class="nav-item" onclick="switchTab('planificacion')">📦 Planificación</div>
+	</div>
+
+	<div class="main-content">
+		<div class="header">
+			<h2 id="tab-title">Analítica de Desmolde y Calidad</h2>
+			<div>Planta: <strong>Río Ceballos</strong></div>
+		</div>
+
+		<!-- MÓDULO 1: ANALÍTICA DESMOLDE (FILTROS + DEFECTOS) -->
+		<div id="sec-analitica">
+			<div class="filter-bar">
+				<div class="filter-group">
+					<label>Desde:</label>
+					<input type="date" id="fecha-desde">
+				</div>
+				<div class="filter-group">
+					<label>Hasta:</label>
+					<input type="date" id="fecha-hasta">
+				</div>
+				<div class="filter-group">
+					<label>Familia / Modelo:</label>
+					<select id="filtro-familia">
+						<option value="TODOS">Todas las Familias</option>
+					</select>
+				</div>
+				<button class="btn" onclick="cargarAnaliticaDesmolde()">Filtrar Datos</button>
+			</div>
+
+			<div id="kpi-familias-container" class="kpi-container">
+				<!-- Se puebla con conteos por familia -->
+			</div>
+
+			<div class="chart-card">
+				<h3 style="margin-top:0; color: var(--accent-teal);">Distribución de Defectos Físicos de Desmolde</h3>
+				<div id="defectos-list">Cargando métricas de desmolde...</div>
+			</div>
+		</div>
+
+		<!-- MÓDULO 2: CALIDAD & NO CONFORMIDADES (INCIDENCIAS Y FOTOS) -->
+		<div id="sec-calidad" style="display: none;">
+			<div class="kpi-container">
+				<div class="kpi-card" style="border-top: 3px solid var(--danger);">
+					<div class="kpi-title">Abiertos</div>
+					<div class="kpi-value" id="kpi-abiertos" style="color: var(--danger);">0</div>
+				</div>
+				<div class="kpi-card" style="border-top: 3px solid var(--warning);">
+					<div class="kpi-title">En Proceso</div>
+					<div class="kpi-value" id="kpi-proceso" style="color: var(--warning);">0</div>
+				</div>
+				<div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+					<div class="kpi-title">Resueltos</div>
+					<div class="kpi-value" id="kpi-resueltos" style="color: var(--accent-teal);">0</div>
+				</div>
+			</div>
+
+			<div id="calidad-list" class="grid-cards">Cargando No Conformidades...</div>
+		</div>
+
+		<!-- MÓDULO 3: MANTENIMIENTO -->
+		<div id="sec-mantenimiento" style="display: none;">
+			<div id="mantenimiento-list" class="grid-cards">Cargando órdenes de mantenimiento...</div>
+		</div>
+
+		<!-- MÓDULO 4: PLANIFICACIÓN -->
+		<div id="sec-planificacion" style="display: none;">
+			<div id="planificacion-list" class="grid-cards">Cargando datos de Odoo...</div>
+		</div>
+	</div>
+
+	<!-- MODAL POP-UP PARA CALIDAD -->
+	<div id="modal-calidad" class="modal-overlay">
+		<div class="modal-content">
+			<span class="modal-close" onclick="cerrarModal()">&times;</span>
+			<h3 id="m-titulo" style="color: var(--accent-teal); margin-top:0;">Detalle de No Conformidad</h3>
+			<p><small id="m-fecha" style="color: var(--text-muted);"></small></p>
+            
+			<div id="m-img-container"></div>
+            
+			<p><strong>Descripción:</strong> <span id="m-descripcion"></span></p>
+			<p><strong>Reportado Por:</strong> <span id="m-auditor"></span></p>
+			<p><strong>Estado Actual:</strong> <span id="m-estado" class="badge"></span></p>
+			<p><strong>Responsable Asignado:</strong> <span id="m-responsable">Sin asignar</span></p>
+
+			<hr style="border-color: var(--border-color); margin: 20px 0;">
+
+			<div id="m-acciones"></div>
+		</div>
+	</div>
+
+	<script>
+		const SUPABASE_URL = "https://vpomzjwmmfudgiahrqlk.supabase.co";
+		const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4"; // Colocar tu Anon Key real
+		let registrosCalidad = [];
+
+		// Inicializar rango de fechas (últimos 7 días)
+		const hoy = new Date();
+		const hace7Dias = new Date();
+		hace7Dias.setDate(hoy.getDate() - 7);
+		document.getElementById('fecha-desde').value = hace7Dias.toISOString().split('T')[0];
+		document.getElementById('fecha-hasta').value = hoy.toISOString().split('T')[0];
+
+		function switchTab(tab) {
+			document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+			document.getElementById('sec-analitica').style.display = 'none';
+			document.getElementById('sec-calidad').style.display = 'none';
+			document.getElementById('sec-mantenimiento').style.display = 'none';
+			document.getElementById('sec-planificacion').style.display = 'none';
+
+			if(tab === 'analitica') {
+				document.getElementById('sec-analitica').style.display = 'block';
+				document.getElementById('tab-title').innerText = 'Analítica de Desmolde y Calidad';
+				cargarAnaliticaDesmolde();
+			} else if(tab === 'calidad') {
+				document.getElementById('sec-calidad').style.display = 'block';
+				document.getElementById('tab-title').innerText = 'Gestión de Calidad y No Conformidades';
+				cargarCalidad();
+			} else if(tab === 'mantenimiento') {
+				document.getElementById('sec-mantenimiento').style.display = 'block';
+				document.getElementById('tab-title').innerText = 'Mantenimiento de Planta';
+				cargarMantenimiento();
+			} else if(tab === 'planificacion') {
+				document.getElementById('sec-planificacion').style.display = 'block';
+				document.getElementById('tab-title').innerText = 'Planificación y Producción';
+				cargarPlanificacion();
+			}
+		}
+
+		// --- MÓDULO ANALÍTICA DESMOLDE ---
+		async function cargarFamiliasDesplegable() {
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?select=modelo`, {
+					headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+				});
+				const data = await res.json();
+				if (Array.isArray(data)) {
+					const modelosUnicos = [...new Set(data.map(item => item.modelo))].sort();
+					const select = document.getElementById('filtro-familia');
+					select.innerHTML = '<option value="TODOS">Todas las Familias</option>' + 
+						modelosUnicos.map(m => `<option value="${m}">${m}</option>`).join('');
+				}
+			} catch (e) { console.error("Error al cargar familias", e); }
+		}
+
+		async function cargarAnaliticaDesmolde() {
+			const desde = document.getElementById('fecha-desde').value;
+			const hasta = document.getElementById('fecha-hasta').value;
+			const familia = document.getElementById('filtro-familia').value;
+
+			let queryUrl = `${SUPABASE_URL}/rest/v1/vista_analitica_desmolde_calidad?fecha_local=gte.${desde}&fecha_local=lte.${hasta}`;
+			if (familia !== 'TODOS') {
+				queryUrl += `&modelo=eq.${encodeURIComponent(familia)}`;
+			}
+
+			try {
+				const res = await fetch(queryUrl, {
+					headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+				});
+				const data = await res.json();
+
+				if (!Array.isArray(data) || data.length === 0) {
+					document.getElementById('kpi-familias-container').innerHTML = '<p>No hay registros para las fechas seleccionadas.</p>';
+					document.getElementById('defectos-list').innerHTML = '<p>Sin datos de defectos en este período.</p>';
+					return;
+				}
+
+				// Conteos por familia
+				const conteoFamilias = {};
+				data.forEach(row => { conteoFamilias[row.modelo] = (conteoFamilias[row.modelo] || 0) + 1; });
+
+				document.getElementById('kpi-familias-container').innerHTML = Object.entries(conteoFamilias).map(([mod, cant]) => `
+					<div class="kpi-card">
+						<div class="kpi-title">${mod}</div>
+						<div class="kpi-value">${cant} <small style="font-size:0.8rem; color:var(--text-muted);">piezas</small></div>
+					</div>
+				`).join('');
+
+				// Frecuencia de Defectos
+				const totales = {
+					"Cajas Rotas": data.reduce((acc, r) => acc + (r.caja_rota || 0), 0),
+					"Cajas Descuadradas": data.reduce((acc, r) => acc + (r.caja_descuadrada || 0), 0),
+					"Fisuras": data.reduce((acc, r) => acc + (r.tiene_fisura || 0), 0),
+					"Poros / Mal Llenado": data.reduce((acc, r) => acc + (r.tiene_poros || 0), 0),
+					"Armadura Expuesta": data.reduce((acc, r) => acc + (r.armadura_expuesta || 0), 0),
+					"Rebabas": data.reduce((acc, r) => acc + (r.tiene_rebabas || 0), 0),
+					"Logo Defectuoso": data.reduce((acc, r) => acc + (r.logo_defectuoso || 0), 0)
+				};
+
+				const totalPiezas = data.length;
+				document.getElementById('defectos-list').innerHTML = Object.entries(totales).map(([defecto, cant]) => {
+					const porcentaje = totalPiezas > 0 ? ((cant / totalPiezas) * 100).toFixed(1) : 0;
+					return `
+						<div class="defect-row">
+							<div class="defect-label">
+								<span><strong>${defecto}</strong></span>
+								<span>${cant} casos (${porcentaje}%)</span>
+							</div>
+							<div class="progress-bar-bg">
+								<div class="progress-bar-fill" style="width: ${porcentaje}%;"></div>
+							</div>
+						</div>
+					`;
+				}).join('');
+
+			} catch (e) {
+				document.getElementById('defectos-list').innerText = 'Error al conectar con Supabase.';
+			}
+		}
+
+		// --- MÓDULO CALIDAD & NO CONFORMIDADES ---
+		async function cargarCalidad() {
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, {
+					headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+				});
+				registrosCalidad = await res.json();
+				const container = document.getElementById('calidad-list');
+
+				if (!Array.isArray(registrosCalidad) || registrosCalidad.length === 0) {
+					container.innerHTML = '<p>No hay registros de calidad cargados.</p>';
+					actualizarContadores(0, 0, 0);
+					return;
+				}
+
+				// KPIs
+				const abiertos = registrosCalidad.filter(r => r.estado === 'Abierto' || !r.estado).length;
+				const enProceso = registrosCalidad.filter(r => r.estado === 'En Proceso').length;
+				const resueltos = registrosCalidad.filter(r => r.estado === 'Resuelto').length;
+				actualizarContadores(abiertos, enProceso, resueltos);
+
+				// Tarjetas
+				container.innerHTML = registrosCalidad.map((item, index) => {
+					const urlLimpia = item.archivo_url ? item.archivo_url.replace('/storage/v1/render/image/public/', '/storage/v1/object/public/') : null;
+					return `
+						<div class="card" onclick="abrirModal(${index})" style="border-left: 4px solid ${item.estado === 'Abierto' || !item.estado ? 'var(--danger)' : (item.estado === 'En Proceso' ? 'var(--warning)' : 'var(--accent-teal)')};">
+							<div class="card-header">
+								<span>${item.descripcion_problema || 'Sin descripción'}</span>
+								<span class="badge ${item.estado === 'Abierto' || !item.estado ? 'badge-danger' : (item.estado === 'En Proceso' ? 'badge-warning' : 'badge-success')}">${item.estado || 'Abierto'}</span>
+							</div>
+							${urlLimpia ? `<img src="${urlLimpia}" style="width:100%; height:120px; object-fit:cover; border-radius:6px; margin:8px 0;" onerror="this.style.display='none';">` : ''}
+							<p><small>👤 <strong>Abierto por:</strong> ${item.auditor || 'Calidad Celotti'}</small></p>
+							<p><small>📅 <strong>Fecha:</strong> ${item.fecha_formateada}</small></p>
+							<p><small>🛠️ <strong>Responsable:</strong> ${item.responsable_calidad || 'Sin tomar'}</small></p>
+						</div>
+					`;
+				}).join('');
+			} catch (e) {
+				document.getElementById('calidad-list').innerText = 'Error al conectar con Supabase.';
+			}
+		}
+
+		function actualizarContadores(a, p, r) {
+			document.getElementById('kpi-abiertos').innerText = a;
+			document.getElementById('kpi-proceso').innerText = p;
+			document.getElementById('kpi-resueltos').innerText = r;
+		}
+
+		function abrirModal(index) {
+			const item = registrosCalidad[index];
+			document.getElementById('m-descripcion').innerText = item.descripcion_problema || 'Sin descripción';
+			document.getElementById('m-fecha').innerText = `Apertura: ${item.fecha_formateada} (${item.tiempo_transcurrido})`;
+			document.getElementById('m-auditor').innerText = item.auditor || 'Calidad Celotti';
+			document.getElementById('m-responsable').innerText = item.responsable_calidad || 'Aún sin tomar';
+            
+			const badge = document.getElementById('m-estado');
+			badge.innerText = item.estado || 'Abierto';
+			badge.className = `badge ${item.estado === 'Abierto' || !item.estado ? 'badge-danger' : (item.estado === 'En Proceso' ? 'badge-warning' : 'badge-success')}`;
+
+			const imgCont = document.getElementById('m-img-container');
+			if (item.archivo_url && item.archivo_url !== "null") {
+				const urlDirecta = item.archivo_url.replace('/storage/v1/render/image/public/', '/storage/v1/object/public/');
+				imgCont.innerHTML = `
+					<a href="${urlDirecta}" target="_blank" title="Ver original">
+						<img src="${urlDirecta}" class="modal-img" alt="Evidencia" onerror="this.onerror=null; this.parentElement.innerHTML='<div style=\\'padding:15px; background:var(--bg-dark); border-radius:8px; text-align:center;\\'><p>⚠️ Error al renderizar la vista previa.</p><a href=\\'${urlDirecta}\\' target=\\'_blank\\' class=\\'btn\\' style=\\'font-size:0.8rem; display:inline-block; margin-top:5px;\\'>Abrir Archivo Original</a></div>';">
+					</a>
+				`;
+			} else {
+				imgCont.innerHTML = '<p><small style="color: var(--text-muted);">Sin foto de evidencia adjunta.</small></p>';
+			}
+
+			const accionesDiv = document.getElementById('m-acciones');
+			if (item.estado === 'Abierto' || !item.estado) {
+				accionesDiv.innerHTML = `
+					<h4>Tomar esta Tarea</h4>
+					<input type="text" id="input-responsable" placeholder="Tu nombre o equipo responsable..." style="width:100%; box-sizing:border-box; margin-bottom:10px;">
+					<button class="btn" onclick="tomarTarea('${item.id}')">Tomar Caso</button>
+				`;
+			} else if (item.estado === 'En Proceso') {
+				accionesDiv.innerHTML = `
+					<h4>Cerrar y Resolver No Conformidad</h4>
+					<p><small>Asignado a: <strong>${item.responsable_calidad}</strong></small></p>
+					<textarea id="input-mejora" rows="3" placeholder="Describir la acción correctiva o solución aplicada..." style="width:100%; box-sizing:border-box; margin-bottom:10px;"></textarea>
+					<button class="btn btn-danger" onclick="cerrarTarea('${item.id}')">Cerrar No Conformidad</button>
+				`;
+			} else {
+				accionesDiv.innerHTML = `
+					<p><strong style="color: var(--accent-teal);">Caso Resuelto</strong></p>
+					<p><small><strong>Comentario de Mejora:</strong> ${item.comentario_mejora || 'Sin comentario de cierre.'}</small></p>
+				`;
+			}
+
+			document.getElementById('modal-calidad').style.display = 'flex';
+		}
+
+		function cerrarModal() {
+			document.getElementById('modal-calidad').style.display = 'none';
+		}
+
+		async function tomarTarea(idRecord) {
+			const resp = document.getElementById('input-responsable').value.trim();
+			if (!resp) { alert('Ingresá tu nombre para tomar la tarea.'); return; }
+
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/gestion_calidad?id=eq.${idRecord}`, {
+					method: 'PATCH',
+					headers: {
+						'apikey': SUPABASE_ANON_KEY,
+						'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						estado: 'En Proceso',
+						responsable_calidad: resp,
+						fecha_toma_caso: new Date().toISOString()
+					})
+				});
+
+				if (res.ok) {
+					cerrarModal();
+					cargarCalidad();
+				} else { alert('Error al actualizar en Supabase.'); }
+			} catch (err) { alert('Error de red.'); }
+		}
+
+		async function cerrarTarea(idRecord) {
+			const mejora = document.getElementById('input-mejora').value.trim();
+			if (!mejora) { alert('Ingresá el comentario de mejora para cerrar el caso.'); return; }
+
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/gestion_calidad?id=eq.${idRecord}`, {
+					method: 'PATCH',
+					headers: {
+						'apikey': SUPABASE_ANON_KEY,
+						'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						estado: 'Resuelto',
+						comentario_mejora: mejora,
+						fecha_resolucion: new Date().toISOString()
+					})
+				});
+
+				if (res.ok) {
+					cerrarModal();
+					cargarCalidad();
+				} else { alert('Error al actualizar en Supabase.'); }
+			} catch (err) { alert('Error de red.'); }
+		}
+
+		// --- OTROS MÓDULOS (MANTENIMIENTO Y PLANIFICACIÓN) ---
+		async function cargarMantenimiento() {
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_tiempos?area=eq.Mantenimiento&select=*`, {
+					headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+				});
+				const data = await res.json();
+				const container = document.getElementById('mantenimiento-list');
+
+				if (!Array.isArray(data) || data.length === 0) {
+					container.innerHTML = '<p>No hay órdenes de mantenimiento pendientes.</p>';
+					return;
+				}
+
+				container.innerHTML = data.map(item => `
+					<div class="card" style="cursor:default;">
+						<div class="card-header">
+							<span>${item.descripcion}</span>
+							<span class="badge ${item.urgencia === 'Alta' ? 'badge-danger' : 'badge-warning'}">${item.urgencia}</span>
+						</div>
+						<p><small>Informante: ${item.informante || 'Planta'}</small></p>
+						<p><small>Iniciado: ${item.iniciado || 'Reciente'}</small></p>
+						<p>Estado: <strong>${item.estado}</strong></p>
+					</div>
+				`).join('');
+			} catch (e) {
+				document.getElementById('mantenimiento-list').innerText = 'Error al cargar mantenimiento.';
+			}
+		}
+
+		async function cargarPlanificacion() {
+			try {
+				const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, {
+					headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+				});
+				const data = await res.json();
+				const container = document.getElementById('planificacion-list');
+
+				if (!Array.isArray(data) || data.length === 0) {
+					container.innerHTML = '<p>No hay órdenes de trabajo pendientes.</p>';
+					return;
+				}
+
+				container.innerHTML = data.map(item => `
+					<div class="card" style="cursor:default;">
+						<div class="card-header">
+							<span>SO: ${item.pedido_so || 'Sin Pedido'}</span>
+							<span class="badge">${item.cant_pendiente} pend.</span>
+						</div>
+						<p>Cliente: <strong>${item.cliente || 'Consumidor Final'}</strong></p>
+						<p>Producto: ${item.producto}</p>
+						<p><small>MO: ${item.orden_fabricacion_mo || 'N/A'}</small></p>
+					</div>
+				`).join('');
+			} catch (e) {
+				document.getElementById('planificacion-list').innerText = 'Error al cargar producción.';
+			}
+		}
+
+		// Service Worker PWA
+		if ('serviceWorker' in navigator) {
+			window.addEventListener('load', () => {
+				const swCode = `
+					self.addEventListener('install', e => self.skipWaiting());
+					self.addEventListener('activate', e => self.clients.claim());
+					self.addEventListener('fetch', e => {
+						e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+					});
+				`;
+				const blob = new Blob([swCode], { type: 'text/javascript' });
+				navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+			});
+		}
+
+		// Carga Inicial
+		cargarFamiliasDesplegable();
+		cargarAnaliticaDesmolde();
+	</script>
+</body>
+</html>
