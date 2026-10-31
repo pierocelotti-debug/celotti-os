@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Celotti OS - Gestión Integral Teal</title>
 
-    <!-- METATAGS PWA PARA TABLET DE PLANTA -->
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -190,35 +189,6 @@
         }
         .btn-danger { background-color: var(--danger); color: white; }
         .btn:hover { opacity: 0.9; }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.75);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            backdrop-filter: blur(4px);
-        }
-        .modal-content {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            width: 90%;
-            max-width: 600px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 24px;
-            position: relative;
-        }
-        .modal-close {
-            position: absolute;
-            top: 15px; right: 20px;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: var(--text-muted);
-        }
     </style>
 </head>
 <body>
@@ -227,7 +197,7 @@
         <div class="brand">🏭 CELOTTI OS</div>
         <div class="nav-item active" onclick="switchTab('planificacion')">📦 Planificación</div>
         <div class="nav-item" onclick="switchTab('calidad')">⚠️ Calidad & Moldes</div>
-        <div class="nav-item" onclick="switchTab('procesos')">⚙️ Mantenimiento</div>
+        <div class="nav-item" onclick="switchTab('mantenimiento')">⚙️ Mantenimiento</div>
         <div class="nav-item" onclick="switchTab('logistica')">🚛 Logística & Despacho</div>
         <div class="nav-item" onclick="switchTab('bienestar')">🌱 Bienestar Org.</div>
         <div class="nav-item" onclick="switchTab('indicadores')">📊 Indicadores Teal</div>
@@ -239,7 +209,7 @@
             <div>Planta: <strong>Río Ceballos</strong></div>
         </div>
 
-        <!-- 1. SOLAPA PLANIFICACIÓN (DEMANDA ODOO + MATRIZ DE MOLDES) -->
+        <!-- 1. SOLAPA PLANIFICACIÓN -->
         <div id="sec-planificacion">
             <div class="filter-bar">
                 <div class="filter-group">
@@ -259,7 +229,7 @@
             <div id="container-plan-moldes" class="grid-cards" style="display:none;">Cargando matriz de moldes...</div>
         </div>
 
-        <!-- 2. SOLAPA CALIDAD & MOLDES -->
+        <!-- 2. SOLAPA CALIDAD -->
         <div id="sec-calidad" style="display: none;">
             <div class="kpi-container">
                 <div class="kpi-card" style="border-top: 3px solid var(--danger);">
@@ -278,61 +248,37 @@
             <div id="calidad-list" class="grid-cards">Cargando registros de calidad...</div>
         </div>
 
-        <!-- 3. SOLAPA PROCESOS & MANTENIMIENTO -->
-        <div id="sec-procesos" style="display: none;">
+        <!-- 3. SOLAPA MANTENIMIENTO -->
+        <div id="sec-mantenimiento" style="display: none;">
             <div id="mantenimiento-list" class="grid-cards">Cargando órdenes de mantenimiento...</div>
         </div>
 
-        <!-- 4. SOLAPA LOGÍSTICA & DESPACHO -->
+        <!-- 4. SOLAPA LOGÍSTICA -->
         <div id="sec-logistica" style="display: none;">
-            <div class="filter-bar">
-                <div class="filter-group">
-                    <label>Buscar Pedido / Cliente:</label>
-                    <input type="text" id="filtro-log-texto" placeholder="Cliente o SO..." oninput="cargarLogistica()">
-                </div>
-            </div>
             <div id="logistica-list" class="grid-cards">Cargando pendientes de despacho...</div>
         </div>
 
-        <!-- 5. SOLAPA BIENESTAR ORGANIZACIONAL -->
+        <!-- 5. SOLAPA BIENESTAR -->
         <div id="sec-bienestar" style="display: none;">
-            <div id="bienestar-list" class="grid-cards">Cargando auditorías de personal...</div>
+            <div id="bienestar-list" class="grid-cards">Cargando datos de personal...</div>
         </div>
 
-        <!-- 6. SOLAPA INDICADORES TEAL (PANEL DE CONTROL GENERAL) -->
+        <!-- 6. SOLAPA INDICADORES -->
         <div id="sec-indicadores" style="display: none;">
             <div class="kpi-container">
                 <div class="kpi-card">
-                    <div class="kpi-title">Coladas Hoy (Llenado)</div>
-                    <div class="kpi-value" id="kpi-ind-coladas" style="color: var(--accent-teal);">0</div>
+                    <div class="kpi-title">Moldes Activos</div>
+                    <div class="kpi-value" id="kpi-ind-moldes" style="color: var(--accent-teal);">0</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-title">Moldes Activos Pista</div>
-                    <div class="kpi-value" id="kpi-ind-moldes">0</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-title">OTs Pendientes Odoo</div>
+                    <div class="kpi-title">OTs Pendientes</div>
                     <div class="kpi-value" id="kpi-ind-ots" style="color: var(--warning);">0</div>
                 </div>
-                <div class="kpi-card">
-                    <div class="kpi-title">Defectos Desmolde Sem.</div>
-                    <div class="kpi-value" id="kpi-ind-defectos" style="color: var(--danger);">0</div>
-                </div>
             </div>
-
-            <div class="card" style="margin-bottom: 20px;">
-                <h3 style="margin-top:0; color: var(--accent-teal);">Avance de Producción y Llenado Diario</h3>
-                <div id="ind-resumen-llenado">Cargando métricas diarias...</div>
+            <div class="card">
+                <h3 style="margin-top:0; color: var(--accent-teal);">Avance Global Teal</h3>
+                <p>Dashboard de control operativo en tiempo real.</p>
             </div>
-        </div>
-    </div>
-
-    <!-- MODAL POP-UP DE INTERACCIÓN -->
-    <div id="modal-app" class="modal-overlay">
-        <div class="modal-content">
-            <span class="modal-close" onclick="cerrarModal()">&times;</span>
-            <h3 id="m-titulo" style="color: var(--accent-teal); margin-top:0;">Detalle</h3>
-            <div id="m-body"></div>
         </div>
     </div>
 
@@ -342,42 +288,38 @@
 
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
-        let cacheCalidad = [];
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
-            ['planificacion', 'calidad', 'procesos', 'logistica', 'bienestar', 'indicadores'].forEach(t => {
-                document.getElementById(`sec-${t}`).style.display = 'none';
+            ['planificacion', 'calidad', 'mantenimiento', 'logistica', 'bienestar', 'indicadores'].forEach(t => {
+                const el = document.getElementById(`sec-${t}`);
+                if (el) el.style.display = 'none';
             });
 
+            const secActiva = document.getElementById(`sec-${tab}`);
+            if (secActiva) secActiva.style.display = 'block';
+
             if(tab === 'planificacion') {
-                document.getElementById('sec-planificacion').style.display = 'block';
                 document.getElementById('tab-title').innerText = 'Planificación y Demanda PCP';
                 cargarPlanificacionData();
             } else if(tab === 'calidad') {
-                document.getElementById('sec-calidad').style.display = 'block';
                 document.getElementById('tab-title').innerText = 'Calidad y Moldes Críticos';
                 cargarCalidadData();
-            } else if(tab === 'procesos') {
-                document.getElementById('sec-procesos').style.display = 'block';
+            } else if(tab === 'mantenimiento') {
                 document.getElementById('tab-title').innerText = 'Gestión de Procesos y Mantenimiento';
                 cargarProcesosData();
             } else if(tab === 'logistica') {
-                document.getElementById('sec-logistica').style.display = 'block';
                 document.getElementById('tab-title').innerText = 'Logística y Expedición';
                 cargarLogisticaData();
             } else if(tab === 'bienestar') {
-                document.getElementById('sec-bienestar').style.display = 'block';
-                document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
+                document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Personal';
                 cargarBienestarData();
             } else if(tab === 'indicadores') {
-                document.getElementById('sec-indicadores').style.display = 'block';
                 document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Teal';
                 cargarIndicadoresData();
             }
         }
 
-        // --- 1. SOLAPA PLANIFICACIÓN ---
         async function cargarPlanificacionData() {
             try {
                 const [resDemanda, resMoldes] = await Promise.all([
@@ -390,7 +332,10 @@
 
                 renderizarDemandaOdoo(cacheDemandaOdoo);
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
-            } catch (e) { console.error("Error al cargar planificación", e); }
+            } catch (e) { 
+                console.error("Error al cargar planificación", e);
+                document.getElementById('container-plan-demanda').innerHTML = '<p>Error de red al conectar con Supabase.</p>';
+            }
         }
 
         function toggleVistaPlanificacion() {
@@ -407,7 +352,7 @@
         function renderizarDemandaOdoo(data) {
             const container = document.getElementById('container-plan-demanda');
             if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No hay órdenes de trabajo pendientes en Odoo.</p>';
+                container.innerHTML = '<p>No hay órdenes de trabajo pendientes cargadas.</p>';
                 return;
             }
 
@@ -417,10 +362,9 @@
                         <span>SO: ${item.pedido_so || 'Sin Pedido'}</span>
                         <span class="badge badge-warning">${item.cant_pendiente || 0} pend.</span>
                     </div>
-                    <p><strong>Producto:</strong> ${item.producto}</p>
+                    <p><strong>Producto:</strong> ${item.producto || 'N/A'}</p>
                     <p><small>👤 <strong>Cliente:</strong> ${item.cliente || 'Consumidor Final'}</small></p>
-                    <p><small>🛠️ <strong>Orden Fab (MO):</strong> ${item.orden_fabricacion_mo || 'N/A'}</small></p>
-                    <p><small>🔑 <strong>Match ID:</strong> ${item.id_unico_match}</small></p>
+                    <p><small>🛠️ <strong>MO:</strong> ${item.orden_fabricacion_mo || 'N/A'}</small></p>
                 </div>
             `).join('');
         }
@@ -428,7 +372,7 @@
         function renderizarMoldesPlanificacion(data) {
             const container = document.getElementById('container-plan-moldes');
             if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No hay moldes en la matriz de planificación.</p>';
+                container.innerHTML = '<p>No hay moldes registrados.</p>';
                 return;
             }
 
@@ -442,7 +386,6 @@
                         </div>
                         <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag}</small></p>
                         <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'}</small></p>
-                        <p><small>⚙️ <strong>Equipo:</strong> ${molde.Equipo \vert{}\vert{} '-'} \vert{} <strong>Molde N°:</strong>${molde.n_molde || '-'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${molde.id_tag}', '${molde.Estado}')">
                                 ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
@@ -472,111 +415,113 @@
         async function toggleEstadoMolde(idTag, estadoActual) {
             const nuevoEstado = (estadoActual || '').toUpperCase() === 'SI' ? 'NO' : 'SI';
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?id_tag=eq.${encodeURIComponent(idTag)}`, { method: 'PATCH', headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?id_tag=eq.${encodeURIComponent(idTag)}`, {
+                    method: 'PATCH',
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
                     body: JSON.stringify({ "Estado": nuevoEstado })
                 });
                 if (res.ok) cargarPlanificacionData();
-            } catch (err) { alert('Error al actualizar el estado del molde.'); }
+            } catch (err) { alert('Error al actualizar molde.'); }
         }
 
-        // --- 2. SOLAPA CALIDAD ---
         async function cargarCalidadData() {
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
-                cacheCalidad = await res.json();
+                const data = await res.json();
                 const container = document.getElementById('calidad-list');
-
-                if (!Array.isArray(cacheCalidad) || cacheCalidad.length === 0) {
-                    container.innerHTML = '<p>No hay incidentes de calidad cargados.</p>';
+                if (!Array.isArray(data) || data.length === 0) {
+                    container.innerHTML = '<p>No hay incidentes de calidad registados.</p>';
                     return;
                 }
-
-                document.getElementById('kpi-cal-abiertos').innerText = cacheCalidad.filter(r => r.estado === 'Abierto' || !r.estado).length;
-                document.getElementById('kpi-cal-proceso').innerText = cacheCalidad.filter(r => r.estado === 'En Proceso').length;
-                document.getElementById('kpi-cal-resueltos').innerText = cacheCalidad.filter(r => r.estado === 'Resuelto').length;
-
-                container.innerHTML = cacheCalidad.map(item => `
+                container.innerHTML = data.map(item => `
                     <div class="card" style="border-left: 4px solid ${item.estado === 'Resuelto' ? 'var(--accent-teal)' : 'var(--danger)'};">
                         <div class="card-header">
-                            <span>${item.descripcion_problema || 'Falla registrada'}</span>
+                            <span>${item.descripcion_problema || 'Incidencia'}</span>
                             <span class="badge ${item.estado === 'Resuelto' ? 'badge-success' : 'badge-danger'}">${item.estado || 'Abierto'}</span>
                         </div>
-                        <p><small>👤 Auditor: ${item.auditor || 'Calidad Planta'}</small></p>
-                        <p><small>📅 Fecha: ${item.fecha_formateada || 'Reciente'}</small></p>
+                        <p><small>Auditor: ${item.auditor || 'Planta'}</small></p>
                     </div>
                 `).join('');
             } catch (e) { console.error(e); }
         }
 
-        // --- 3. SOLAPA PROCESOS & MANTENIMIENTO ---
         async function cargarProcesosData() {
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_tiempos?area=eq.Mantenimiento&select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_tiempos?area=eq.Mantenimiento&select=*`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
                 const data = await res.json();
                 const container = document.getElementById('mantenimiento-list');
-
                 if (!Array.isArray(data) || data.length === 0) {
                     container.innerHTML = '<p>Sin órdenes de mantenimiento pendientes.</p>';
                     return;
                 }
-
                 container.innerHTML = data.map(item => `
-                    <div class="card" style="border-left: 4px solid ${item.estado === 'Abierta' ? 'var(--danger)' : 'var(--warning)'};">
+                    <div class="card" style="border-left: 4px solid var(--warning);">
                         <div class="card-header">
                             <span>${item.descripcion}</span>
-                            <span class="badge ${item.urgencia === 'Alta' ? 'badge-danger' : 'badge-warning'}">${item.urgencia}</span>
+                            <span class="badge badge-warning">${item.urgencia}</span>
                         </div>
-                        <p><small>👤 Informante: ${item.informante || 'Operario Planta'}</small></p>
-                        <p><small>⏱️ Iniciado: ${item.iniciado}</small></p>
-                        <p>Estado: <strong>${item.estado}</strong></p>
+                        <p><small>Iniciado: ${item.iniciado}</small></p>
                     </div>
                 `).join('');
             } catch (e) { console.error(e); }
         }
 
-        // --- 4. SOLAPA LOGÍSTICA ---
         async function cargarLogisticaData() {
             const container = document.getElementById('logistica-list');
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*&cant_pendiente=gt.0`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*&cant_pendiente=gt.0`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
                 const data = await res.json();
-
                 if (!Array.isArray(data) || data.length === 0) {
-                    container.innerHTML = '<p>No hay pedidos pendientes de despacho.</p>';
+                    container.innerHTML = '<p>No hay despachos pendientes.</p>';
                     return;
                 }
-
                 container.innerHTML = data.map(item => `
                     <div class="card" style="border-left: 4px solid var(--blue-info);">
                         <div class="card-header">
                             <span>SO: ${item.pedido_so || 'Sin SO'}</span>
                             <span class="badge badge-info">${item.cant_pendiente} pzas</span>
                         </div>
-                        <p><strong>Cliente:</strong> ${item.cliente || 'Consumidor Final'}</p>
-                        <p><small>📦 Producto: ${item.producto}</small></p>
+                        <p>Cliente: <strong>${item.cliente || 'Consumidor Final'}</strong></p>
                     </div>
                 `).join('');
             } catch (e) { console.error(e); }
         }
 
-        // --- 5. SOLAPA BIENESTAR ORGANIZACIONAL ---
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/Personas?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/Personas?select=*`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
                 const data = await res.json();
-
                 if (!Array.isArray(data) || data.length === 0) {
-                    container.innerHTML = '<p>Sin registros de personal cargados.</p>';
+                    container.innerHTML = '<p>Sin datos de personal.</p>';
                     return;
                 }
-
-                container.innerHTML = data.map(persona => `
+                container.innerHTML = data.map(p => `
                     <div class="card">
                         <div class="card-header">
-                            <span>${persona.Nombre || 'Sin Nombre'}</span>
-                            <span class="badge ${persona.Estado === 'Activo' ? 'badge-success' : 'badge-danger'}">${persona.Estado ||
+                            <span>${p.Nombre || 'Sin Nombre'}</span>
+                            <span class="badge ${p.Estado === 'Activo' ? 'badge-success' : 'badge-danger'}">${p.Estado || 'Activo'}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function cargarIndicadoresData() {
+            document.getElementById('kpi-ind-moldes').innerText = cacheMoldesPlanificacion.filter(m => (m.Estado || '').toUpperCase() === 'SI').length || 0;
+            document.getElementById('kpi-ind-ots').innerText = cacheDemandaOdoo.length || 0;
+        }
+
+        // Carga inicial
+        cargarPlanificacionData();
+    </script>
+</body>
+</html>
