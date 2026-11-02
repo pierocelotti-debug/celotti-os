@@ -219,9 +219,35 @@
             border: 1px solid var(--accent-teal);
             border-radius: 12px;
             width: 90%;
-            max-width: 520px;
+            max-width: 540px;
             padding: 24px;
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
+
+        /* Timeline de Trazabilidad */
+        .timeline {
+            position: relative;
+            margin: 16px 0;
+            padding-left: 20px;
+            border-left: 2px solid var(--border-color);
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 12px;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 4px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+        }
+        .timeline-item.active::before {
+            background: var(--accent-teal);
+            box-shadow: 0 0 8px var(--accent-teal);
         }
     </style>
 </head>
@@ -247,19 +273,51 @@
         <div id="sec-planificacion">
             <div class="filter-bar">
                 <div class="filter-group">
-                    <label>Filtrar por Código o Producto:</label>
-                    <input type="text" id="filtro-plan-texto" placeholder="Ej: PILAR, NICHOTAPA..." oninput="filtrarPlanificacion()">
+                    <label>Buscar Molde o Producto:</label>
+                    <input type="text" id="filtro-plan-texto" placeholder="Ej: Pilar, N° 8, Molde 2..." oninput="filtrarPlanificacion()">
                 </div>
                 <div class="filter-group">
                     <label>Ver Vista:</label>
                     <select id="filtro-plan-vista" onchange="toggleVistaPlanificacion()">
+                        <option value="MONITOREO_REALTIME">⏱️ Ciclo de Moldes RFID (Tiempo Real)</option>
                         <option value="DEMANDA">Demanda Pendiente Odoo</option>
                         <option value="MOLDES">Matriz de Moldes Activos</option>
                     </select>
                 </div>
+                <div class="filter-group" id="group-filtro-equipo">
+                    <label>Equipo:</label>
+                    <select id="filtro-plan-equipo" onchange="filtrarPlanificacion()">
+                        <option value="TODOS">Todos los equipos</option>
+                        <option value="Amarillo">Amarillo</option>
+                        <option value="Azul">Azul</option>
+                        <option value="Rojo">Rojo</option>
+                        <option value="Verde">Verde</option>
+                    </select>
+                </div>
             </div>
 
-            <div id="container-plan-demanda" class="grid-cards">Cargando órdenes de producción...</div>
+            <!-- KPIs de Ciclo de Moldes -->
+            <div class="kpi-container" id="kpis-plan-moldes">
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">Moldes Finalizados</div>
+                    <div class="kpi-value" id="kpi-moldes-finalizados" style="color: var(--accent-teal);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                    <div class="kpi-title">Por Llenar</div>
+                    <div class="kpi-value" id="kpi-moldes-porllenar" style="color: var(--blue-info);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                    <div class="kpi-title">Armando en Marcha</div>
+                    <div class="kpi-value" id="kpi-moldes-armando" style="color: var(--warning);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--danger);">
+                    <div class="kpi-title">Alertas Críticas</div>
+                    <div class="kpi-value" id="kpi-moldes-criticos" style="color: var(--danger);">0</div>
+                </div>
+            </div>
+
+            <div id="container-plan-realtime" class="grid-cards">Cargando monitoreo de moldes RFID...</div>
+            <div id="container-plan-demanda" class="grid-cards" style="display:none;">Cargando órdenes de producción...</div>
             <div id="container-plan-moldes" class="grid-cards" style="display:none;">Cargando matriz de moldes...</div>
         </div>
 
@@ -349,7 +407,21 @@
         </div>
     </div>
 
-    <!-- MODAL DRILL-DOWN PARA OPERARIOS CON TRIGGER N8N -->
+    <!-- MODAL TRAZA DETALLADA DE MOLDE RFID -->
+    <div id="modal-molde" class="modal-overlay" style="display: none;">
+        <div class="modal-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 id="modal-molde-titulo" style="margin: 0; color: var(--accent-teal);">Molde #</h3>
+                <span class="badge" id="modal-molde-estado">ESTADO</span>
+            </div>
+            <div id="modal-molde-body" style="font-size: 0.9rem; line-height: 1.6;"></div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn" onclick="cerrarModalMolde()">Cerrar Traza</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BIENESTAR ORGANIZACIONAL -->
     <div id="modal-operario" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -369,6 +441,7 @@
         const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4";
         const WEBHOOK_N8N_PDF = "https://n8n.celotti.com.ar/webhook/generar-reporte-bienestar";
 
+        let cacheEficienciaMoldes = [];
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
@@ -404,33 +477,180 @@
             }
         }
 
+        /* -------------------------------------------------------------
+           1. SOLAPA PLANIFICACIÓN (MONITOREO DE MOLDES EN TIEMPO REAL)
+        ------------------------------------------------------------- */
         async function cargarPlanificacionData() {
             try {
-                const [resDemanda, resMoldes] = await Promise.all([
+                const [resEficiencia, resDemanda, resMoldes] = await Promise.all([
+                    fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*&order=n_molde.asc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
                     fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
                     fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
                 ]);
 
+                cacheEficienciaMoldes = await resEficiencia.json();
                 cacheDemandaOdoo = await resDemanda.json();
                 cacheMoldesPlanificacion = await resMoldes.json();
 
+                actualizarKpisMoldes(cacheEficienciaMoldes);
+                renderizarRealtimeMoldes(cacheEficienciaMoldes);
                 renderizarDemandaOdoo(cacheDemandaOdoo);
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
             } catch (e) { 
-                console.error("Error al cargar planificación", e);
-                document.getElementById('container-plan-demanda').innerHTML = '<p>Error de red al conectar con Supabase.</p>';
+                console.error("Error al cargar datos de planificación", e);
+                document.getElementById('container-plan-realtime').innerHTML = '<p style="color: var(--danger);">Error al conectar con Supabase.</p>';
             }
         }
 
         function toggleVistaPlanificacion() {
             const vista = document.getElementById('filtro-plan-vista').value;
-            if (vista === 'DEMANDA') {
-                document.getElementById('container-plan-demanda').style.display = 'grid';
-                document.getElementById('container-plan-moldes').style.display = 'none';
+            const containerRealtime = document.getElementById('container-plan-realtime');
+            const containerDemanda = document.getElementById('container-plan-demanda');
+            const containerMoldes = document.getElementById('container-plan-moldes');
+            const kpisMoldes = document.getElementById('kpis-plan-moldes');
+
+            if (vista === 'MONITOREO_REALTIME') {
+                containerRealtime.style.display = 'grid';
+                containerDemanda.style.display = 'none';
+                containerMoldes.style.display = 'none';
+                kpisMoldes.style.display = 'grid';
+            } else if (vista === 'DEMANDA') {
+                containerRealtime.style.display = 'none';
+                containerDemanda.style.display = 'grid';
+                containerMoldes.style.display = 'none';
+                kpisMoldes.style.display = 'none';
             } else {
-                document.getElementById('container-plan-demanda').style.display = 'none';
-                document.getElementById('container-plan-moldes').style.display = 'grid';
+                containerRealtime.style.display = 'none';
+                containerDemanda.style.display = 'none';
+                containerMoldes.style.display = 'grid';
+                kpisMoldes.style.display = 'none';
             }
+        }
+
+        function actualizarKpisMoldes(data) {
+            if (!Array.isArray(data)) return;
+            document.getElementById('kpi-moldes-finalizados').innerText = data.filter(m => m.estado_flujo === 'FINALIZADO').length;
+            document.getElementById('kpi-moldes-porllenar').innerText = data.filter(m => m.estado_flujo === 'POR LLENAR').length;
+            document.getElementById('kpi-moldes-armando').innerText = data.filter(m => m.estado_flujo === 'ARMANDO').length;
+            document.getElementById('kpi-moldes-criticos').innerText = data.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
+        }
+
+        function renderizarRealtimeMoldes(data) {
+            const container = document.getElementById('container-plan-realtime');
+            if (!Array.isArray(data) || data.length === 0) {
+                container.innerHTML = '<p>No se registran marcas de moldes para el turno actual.</p>';
+                return;
+            }
+
+            container.innerHTML = data.map(item => {
+                let badgeEstado = `<span class="badge badge-info">SIN INICIAR</span>`;
+                let borderColor = 'var(--border-color)';
+
+                if (item.estado_flujo === 'FINALIZADO') {
+                    badgeEstado = `<span class="badge badge-success">FINALIZADO</span>`;
+                    borderColor = 'var(--accent-teal)';
+                } else if (item.estado_flujo === 'POR LLENAR') {
+                    badgeEstado = `<span class="badge badge-info">POR LLENAR</span>`;
+                    borderColor = 'var(--blue-info)';
+                } else if (item.estado_flujo === 'ARMANDO') {
+                    badgeEstado = `<span class="badge badge-warning">ARMANDO</span>`;
+                    borderColor = 'var(--warning)';
+                }
+
+                let badgeAlerta = `<span class="badge">${item.alerta_productividad}</span>`;
+                if (item.alerta_productividad === '🚨 CRITICO') badgeAlerta = `<span class="badge badge-danger">🚨 CRÍTICO</span>`;
+                else if (item.alerta_productividad === '⚠️ CON DESVIO') badgeAlerta = `<span class="badge badge-warning">⚠️ CON DESVÍO</span>`;
+                else if (item.alerta_productividad === '✅ EN TIEMPO') badgeAlerta = `<span class="badge badge-success">✅ EN TIEMPO</span>`;
+
+                const horaDes = item.hora_desarmado ? item.hora_desarmado.substring(11, 16) : '--:--';
+                const horaArm = item.hora_armado ? item.hora_armado.substring(11, 16) : '--:--';
+                const horaLle = item.hora_llenado ? item.hora_llenado.substring(11, 16) : '--:--';
+
+                return `
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verTrazaMolde(${item.n_molde}, '${item.producto}')">
+                        <div class="card-header">
+                            <span>Molde #${item.n_molde}</span>
+                            ${badgeEstado}
+                        </div>
+                        <p style="font-size: 0.9rem; font-weight: 600; margin: 4px 0;">${item.producto}</p>
+                        <p><small>👥 <strong>Equipo:</strong> ${item.equipo_planificacion || 'Sin Asignar'}</small></p>
+                        <p><small>⏱️ <strong>Obj:</strong> ${item.tiempo_objetivo_min} min | <strong>Real:</strong> ${item.tiempo_real_min ? item.tiempo_real_min + ' min' : 'En proceso'}</small></p>
+                        <div style="font-size: 0.8rem; background: var(--bg-dark); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
+                            <span>🔓 Des: <strong>${horaDes}</strong></span>
+                            <span>🔒 Arm: <strong>${horaArm}</strong></span>
+                            <span>🧱 Lle: <strong>${horaLle}</strong></span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                            ${badgeAlerta}
+                            <small style="color: var(--text-muted);">Ver Traza ➔</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function verTrazaMolde(nMolde, producto) {
+            const m = cacheEficienciaMoldes.find(item => item.n_molde === nMolde && item.producto === producto);
+            if (!m) return;
+
+            document.getElementById('modal-molde-titulo').innerText = `Molde #${m.n_molde} - ${m.producto}`;
+            document.getElementById('modal-molde-estado').innerText = m.estado_flujo;
+
+            const formatHora = (str) => str ? new Date(str).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Pendiente';
+
+            document.getElementById('modal-molde-body').innerHTML = `
+                <p><strong>Equipo Planificado:</strong> ${m.equipo_planificacion}</p>
+                <p><strong>Tiempo Objetivo Armado:</strong> ${m.tiempo_objetivo_min} minutos</p>
+                <p><strong>Tiempo Real Medido:</strong> ${m.tiempo_real_min ? m.tiempo_real_min + ' minutos' : 'En ejecución'}</p>
+                <p><strong>Estado Productividad:</strong> ${m.alerta_productividad}</p>
+                <hr style="border-color: var(--border-color); margin: 12px 0;">
+                <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Cronología de Registros RFID:</h4>
+                <div class="timeline">
+                    <div class="timeline-item ${m.hora_desarmado ? 'active' : ''}">
+                        <strong>1. Puesto Desarmado:</strong> ${formatHora(m.hora_desarmado)}
+                    </div>
+                    <div class="timeline-item ${m.hora_armado ? 'active' : ''}">
+                        <strong>2. Puesto Armado:</strong> ${formatHora(m.hora_armado)}
+                    </div>
+                    <div class="timeline-item ${m.hora_llenado ? 'active' : ''}">
+                        <strong>3. Puesto Llenado:</strong> ${formatHora(m.hora_llenado)}
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modal-molde').style.display = 'flex';
+        }
+
+        function cerrarModalMolde() {
+            document.getElementById('modal-molde').style.display = 'none';
+        }
+
+        function filtrarPlanificacion() {
+            const texto = document.getElementById('filtro-plan-texto').value.toLowerCase();
+            const equipo = document.getElementById('filtro-plan-equipo').value;
+
+            // Filtrar Realtime Moldes
+            const moldesFiltrados = cacheEficienciaMoldes.filter(m => {
+                const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || m.n_molde.toString().includes(texto);
+                const coincideEquipo = (equipo === 'TODOS') || (m.equipo_planificacion === equipo);
+                return coincideTexto && coincideEquipo;
+            });
+            renderizarRealtimeMoldes(moldesFiltrados);
+
+            // Filtrar Demanda Odoo
+            const demandaFiltrada = cacheDemandaOdoo.filter(d => 
+                (d.producto || '').toLowerCase().includes(texto) || 
+                (d.pedido_so || '').toLowerCase().includes(texto) ||
+                (d.cliente || '').toLowerCase().includes(texto)
+            );
+            renderizarDemandaOdoo(demandaFiltrada);
+
+            // Filtrar Matriz Moldes
+            const matrizFiltrada = cacheMoldesPlanificacion.filter(m =>
+                (m.nombre_simplificado || '').toLowerCase().includes(texto) ||
+                (m.Familia || '').toLowerCase().includes(texto)
+            );
+            renderizarMoldesPlanificacion(matrizFiltrada);
         }
 
         function renderizarDemandaOdoo(data) {
@@ -478,22 +698,6 @@
                     </div>
                 `;
             }).join('');
-        }
-
-        function filtrarPlanificacion() {
-            const texto = document.getElementById('filtro-plan-texto').value.toLowerCase();
-            const demandaFiltrada = cacheDemandaOdoo.filter(d => 
-                (d.producto || '').toLowerCase().includes(texto) || 
-                (d.pedido_so || '').toLowerCase().includes(texto) ||
-                (d.cliente || '').toLowerCase().includes(texto)
-            );
-            renderizarDemandaOdoo(demandaFiltrada);
-
-            const moldesFiltrados = cacheMoldesPlanificacion.filter(m =>
-                (m.nombre_simplificado || '').toLowerCase().includes(texto) ||
-                (m.Familia || '').toLowerCase().includes(texto)
-            );
-            renderizarMoldesPlanificacion(moldesFiltrados);
         }
 
         async function toggleEstadoMolde(idTag, estadoActual) {
