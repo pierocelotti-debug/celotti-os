@@ -35,6 +35,9 @@
             --danger: #ef4444;
             --warning: #f59e0b;
             --blue-info: #3b82f6;
+            --gold: #fbbf24;
+            --silver: #cbd5e1;
+            --bronze: #d97706;
         }
         body {
             margin: 0;
@@ -156,6 +159,14 @@
             border-radius: 10px;
             padding: 18px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .card-interactive {
+            cursor: pointer;
+        }
+        .card-interactive:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-teal);
         }
         .card-header {
             font-weight: 700;
@@ -176,6 +187,9 @@
         .badge-warning { background: var(--warning); color: #000000; }
         .badge-success { background: var(--accent-teal); color: #0f172a; }
         .badge-info { background: var(--blue-info); color: #ffffff; }
+        .badge-gold { background: var(--gold); color: #000000; font-weight: 800; }
+        .badge-silver { background: var(--silver); color: #000000; font-weight: 800; }
+        .badge-bronze { background: var(--bronze); color: #ffffff; font-weight: 800; }
 
         .btn {
             background-color: var(--accent-teal);
@@ -189,6 +203,27 @@
         }
         .btn-danger { background-color: var(--danger); color: white; }
         .btn:hover { opacity: 0.9; }
+
+        /* Estilos del Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+        .modal-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--accent-teal);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            padding: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
@@ -260,7 +295,39 @@
 
         <!-- 5. SOLAPA BIENESTAR -->
         <div id="sec-bienestar" style="display: none;">
-            <div id="bienestar-list" class="grid-cards">Cargando datos de personal...</div>
+            <div class="kpi-container">
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">Promedio General Auditorías</div>
+                    <div class="kpi-value" id="kpi-bie-promedio" style="color: var(--accent-teal);">0%</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                    <div class="kpi-title">Operarios Auditados</div>
+                    <div class="kpi-value" id="kpi-bie-auditados" style="color: var(--blue-info);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                    <div class="kpi-title">Requieren Apoyo Teal</div>
+                    <div class="kpi-value" id="kpi-bie-apoyo" style="color: var(--warning);">0</div>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Buscar Operario:</label>
+                    <input type="text" id="filtro-bie-nombre" placeholder="Nombre de operario..." oninput="filtrarRankingBienestar()">
+                </div>
+                <div class="filter-group">
+                    <label>Nivel de Desempeño:</label>
+                    <select id="filtro-bie-nivel" onchange="filtrarRankingBienestar()">
+                        <option value="TODOS">Todos los niveles</option>
+                        <option value="EXCELENTE">Excelente (>= 90%)</option>
+                        <option value="CONSOLIDACION">Consolidación (70% - 89%)</option>
+                        <option value="REQUIERE_APOYO">Requiere Apoyo (< 70%)</option>
+                    </select>
+                </div>
+            </div>
+
+            <h3 style="color: var(--accent-teal); margin-bottom: 14px;">🏆 Ranking de Auditorías y Desempeño Org.</h3>
+            <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
         <!-- 6. SOLAPA INDICADORES -->
@@ -282,12 +349,27 @@
         </div>
     </div>
 
+    <!-- MODAL DRILL-DOWN PARA OPERARIOS -->
+    <div id="modal-operario" class="modal-overlay" style="display: none;">
+        <div class="modal-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 id="modal-op-nombre" style="margin: 0; color: var(--accent-teal);">Operario</h3>
+                <span class="badge" id="modal-op-posicion">#0</span>
+            </div>
+            <div id="modal-op-body" style="font-size: 0.9rem; line-height: 1.6;"></div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn" onclick="cerrarModalOperario()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = "https://vpomzjwmmfudgiahrqlk.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4";
 
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
+        let cacheRankingBienestar = [];
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
@@ -312,7 +394,7 @@
                 document.getElementById('tab-title').innerText = 'Logística y Expedición';
                 cargarLogisticaData();
             } else if(tab === 'bienestar') {
-                document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Personal';
+                document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
                 cargarBienestarData();
             } else if(tab === 'indicadores') {
                 document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Teal';
@@ -432,7 +514,7 @@
                 const data = await res.json();
                 const container = document.getElementById('calidad-list');
                 if (!Array.isArray(data) || data.length === 0) {
-                    container.innerHTML = '<p>No hay incidentes de calidad registados.</p>';
+                    container.innerHTML = '<p>No hay incidentes de calidad registrados.</p>';
                     return;
                 }
                 container.innerHTML = data.map(item => `
@@ -493,26 +575,127 @@
             } catch (e) { console.error(e); }
         }
 
+        /* -------------------------------------------------------------
+           5. SOLAPA BIENESTAR ORGANIZACIONAL (RANKING & DRILL-DOWN)
+        ------------------------------------------------------------- */
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/Personas?select=*`, {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, {
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
-                const data = await res.json();
-                if (!Array.isArray(data) || data.length === 0) {
-                    container.innerHTML = '<p>Sin datos de personal.</p>';
+                cacheRankingBienestar = await res.json();
+
+                if (!Array.isArray(cacheRankingBienestar) || cacheRankingBienestar.length === 0) {
+                    container.innerHTML = '<p>Sin datos de auditorías de operarios registrados.</p>';
                     return;
                 }
-                container.innerHTML = data.map(p => `
-                    <div class="card">
+
+                // Cálculo de KPIs de Bienestar
+                const totalOps = cacheRankingBienestar.length;
+                const sumaPct = cacheRankingBienestar.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
+                const promGeneral = totalOps > 0 ? (sumaPct / totalOps).toFixed(1) : 0;
+                const requierenApoyo = cacheRankingBienestar.filter(o => o.nivel_desempeno === 'REQUIERE_APOYO').length;
+
+                document.getElementById('kpi-bie-promedio').innerText = `${promGeneral}%`;
+                document.getElementById('kpi-bie-auditados').innerText = totalOps;
+                document.getElementById('kpi-bie-apoyo').innerText = requierenApoyo;
+
+                renderizarRankingBienestar(cacheRankingBienestar);
+            } catch (e) {
+                console.error("Error al cargar ranking de bienestar", e);
+                container.innerHTML = '<p>Error al obtener ranking de auditorías desde Supabase.</p>';
+            }
+        }
+
+        function renderizarRankingBienestar(data) {
+            const container = document.getElementById('bienestar-list');
+            if (!Array.isArray(data) || data.length === 0) {
+                container.innerHTML = '<p>No se encontraron operarios con el filtro seleccionado.</p>';
+                return;
+            }
+
+            container.innerHTML = data.map(item => {
+                const pos = item.posicion_ranking;
+                let badgePosicion = `<span class="badge">#${pos}</span>`;
+                let borderColor = 'var(--border-color)';
+
+                if (pos === 1) {
+                    badgePosicion = `<span class="badge badge-gold">🥇 #1</span>`;
+                    borderColor = 'var(--gold)';
+                } else if (pos === 2) {
+                    badgePosicion = `<span class="badge badge-silver">🥈 #2</span>`;
+                    borderColor = 'var(--silver)';
+                } else if (pos === 3) {
+                    badgePosicion = `<span class="badge badge-bronze">🥉 #3</span>`;
+                    borderColor = 'var(--bronze)';
+                }
+
+                let badgeNivel = `<span class="badge badge-success">EXCELENTE</span>`;
+                if (item.nivel_desempeno === 'CONSOLIDACION') {
+                    badgeNivel = `<span class="badge badge-info">CONSOLIDACIÓN</span>`;
+                } else if (item.nivel_desempeno === 'REQUIERE_APOYO') {
+                    badgeNivel = `<span class="badge badge-warning">REQUIERE APOYO</span>`;
+                }
+
+                return `
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleOperario(${item.persona_id})">
                         <div class="card-header">
-                            <span>${p.Nombre || 'Sin Nombre'}</span>
-                            <span class="badge ${p.Estado === 'Activo' ? 'badge-success' : 'badge-danger'}">${p.Estado || 'Activo'}</span>
+                            <span>${item.Operario}</span>
+                            ${badgePosicion}
+                        </div>
+                        <p style="margin: 4px 0;"><strong>Promedio:</strong> <span style="font-size: 1.2rem; color: var(--accent-teal);">${item.cumplimiento_promedio_pct}%</span> <small>(${item.puntaje_promedio} / 10)</small></p>
+                        <p><small>👥 <strong>Equipos:</strong> ${item.Equipos || 'Sin Asignar'}</small></p>
+                        <p><small>📊 <strong>Total Auditorías:</strong> ${item.total_auditorias}</small></p>
+                        <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            ${badgeNivel}
+                            <small style="color: var(--text-muted);">Ver historial ➔</small>
                         </div>
                     </div>
-                `).join('');
-            } catch (e) { console.error(e); }
+                `;
+            }).join('');
+        }
+
+        function filtrarRankingBienestar() {
+            const texto = document.getElementById('filtro-bie-nombre').value.toLowerCase();
+            const nivel = document.getElementById('filtro-bie-nivel').value;
+
+            const filtrados = cacheRankingBienestar.filter(op => {
+                const coincideNombre = (op.Operario || '').toLowerCase().includes(texto);
+                const coincideNivel = (nivel === 'TODOS') || (op.nivel_desempeno === nivel);
+                return coincideNombre && coincideNivel;
+            });
+
+            renderizarRankingBienestar(filtrados);
+        }
+
+        function verDetalleOperario(personaId) {
+            const op = cacheRankingBienestar.find(p => p.persona_id === personaId);
+            if (!op) return;
+
+            document.getElementById('modal-op-nombre').innerText = op.Operario;
+            document.getElementById('modal-op-posicion').innerText = `Puesto Ranking: #${op.posicion_ranking}`;
+
+            const historialFormateado = (op.historial_puntajes || '').split(' | ').join(' -> ');
+            const fechaUltima = op.ultima_auditoria_fecha ? new Date(op.ultima_auditoria_fecha).toLocaleDateString('es-AR') : 'N/A';
+
+            document.getElementById('modal-op-body').innerHTML = `
+                <p><strong>Puntaje Promedio:</strong> ${op.puntaje_promedio} / 10 (${op.cumplimiento_promedio_pct}%)</p>
+                <p><strong>Nivel de Desempeño:</strong> ${op.nivel_desempeno}</p>
+                <p><strong>Equipos Activos:</strong> ${op.Equipos || 'General'}</p>
+                <p><strong>Estado RRHH:</strong> ${op.estado_rrhh}</p>
+                <hr style="border-color: var(--border-color); margin: 12px 0;">
+                <p><strong>ID Odoo:</strong> ${op.id_odoo || 'N/A'} | <strong>Tag RFID:</strong> <code>${op.numero_tag || 'Sin Tag'}</code></p>
+                <p><strong>Total de Auditorías:</strong> ${op.total_auditorias}</p>
+                <p><strong>Historial Secuencial:</strong> <br><span style="color: var(--accent-teal);">${historialFormateado}</span></p>
+                <p><small style="color: var(--text-muted);">Última Auditoría realizada: ${fechaUltima}</small></p>
+            `;
+
+            document.getElementById('modal-operario').style.display = 'flex';
+        }
+
+        function cerrarModalOperario() {
+            document.getElementById('modal-operario').style.display = 'none';
         }
 
         async function cargarIndicadoresData() {
