@@ -136,6 +136,17 @@
             border-radius: 10px;
             padding: 16px;
             text-align: center;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .kpi-card-interactive {
+            cursor: pointer;
+        }
+        .kpi-card-interactive:hover {
+            transform: translateY(-2px);
+        }
+        .kpi-card.active-filter {
+            background-color: #1a2332;
+            box-shadow: 0 0 10px var(--border-color);
         }
         .kpi-title {
             font-size: 0.75rem;
@@ -224,7 +235,6 @@
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
 
-        /* Timeline de Trazabilidad */
         .timeline {
             position: relative;
             margin: 16px 0;
@@ -296,21 +306,21 @@
                 </div>
             </div>
 
-            <!-- KPIs de Ciclo de Moldes -->
+            <!-- KPIs de Ciclo de Moldes (INTERACTIVOS TIPO POWER BI) -->
             <div class="kpi-container" id="kpis-plan-moldes">
-                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                <div class="kpi-card kpi-card-interactive" id="kpi-card-finalizados" style="border-top: 3px solid var(--accent-teal);" onclick="seleccionarFiltroKpi('FINALIZADO')">
                     <div class="kpi-title">Moldes Finalizados</div>
                     <div class="kpi-value" id="kpi-moldes-finalizados" style="color: var(--accent-teal);">0</div>
                 </div>
-                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                <div class="kpi-card kpi-card-interactive" id="kpi-card-porllenar" style="border-top: 3px solid var(--blue-info);" onclick="seleccionarFiltroKpi('POR LLENAR')">
                     <div class="kpi-title">Por Llenar</div>
                     <div class="kpi-value" id="kpi-moldes-porllenar" style="color: var(--blue-info);">0</div>
                 </div>
-                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                <div class="kpi-card kpi-card-interactive" id="kpi-card-armando" style="border-top: 3px solid var(--warning);" onclick="seleccionarFiltroKpi('ARMANDO')">
                     <div class="kpi-title">Armando en Marcha</div>
                     <div class="kpi-value" id="kpi-moldes-armando" style="color: var(--warning);">0</div>
                 </div>
-                <div class="kpi-card" style="border-top: 3px solid var(--danger);">
+                <div class="kpi-card kpi-card-interactive" id="kpi-card-criticos" style="border-top: 3px solid var(--danger);" onclick="seleccionarFiltroKpi('CRITICO')">
                     <div class="kpi-title">Alertas Críticas</div>
                     <div class="kpi-value" id="kpi-moldes-criticos" style="color: var(--danger);">0</div>
                 </div>
@@ -445,6 +455,7 @@
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
+        let filtroEstadoKpiActivo = null; // Filtro interactivo de la KPI Card
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
@@ -478,7 +489,7 @@
         }
 
         /* -------------------------------------------------------------
-           1. SOLAPA PLANIFICACIÓN (MONITOREO DE MOLDES EN TIEMPO REAL)
+           1. SOLAPA PLANIFICACIÓN (MONITOREO DE MOLDES INTERACTIVO)
         ------------------------------------------------------------- */
         async function cargarPlanificacionData() {
             try {
@@ -493,7 +504,7 @@
                 cacheMoldesPlanificacion = await resMoldes.json();
 
                 actualizarKpisMoldes(cacheEficienciaMoldes);
-                renderizarRealtimeMoldes(cacheEficienciaMoldes);
+                filtrarPlanificacion(); // Aplica los renderizados según filtros activos
                 renderizarDemandaOdoo(cacheDemandaOdoo);
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
             } catch (e) { 
@@ -535,10 +546,28 @@
             document.getElementById('kpi-moldes-criticos').innerText = data.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
         }
 
+        function seleccionarFiltroKpi(estado) {
+            // Remueve clase activa de todas las tarjetas
+            document.querySelectorAll('.kpi-card-interactive').forEach(card => card.classList.remove('active-filter'));
+
+            if (filtroEstadoKpiActivo === estado) {
+                // Alternar: si ya estaba seleccionado, se desactiva
+                filtroEstadoKpiActivo = null;
+            } else {
+                filtroEstadoKpiActivo = estado;
+                if (estado === 'FINALIZADO') document.getElementById('kpi-card-finalizados').classList.add('active-filter');
+                else if (estado === 'POR LLENAR') document.getElementById('kpi-card-porllenar').classList.add('active-filter');
+                else if (estado === 'ARMANDO') document.getElementById('kpi-card-armando').classList.add('active-filter');
+                else if (estado === 'CRITICO') document.getElementById('kpi-card-criticos').classList.add('active-filter');
+            }
+
+            filtrarPlanificacion();
+        }
+
         function renderizarRealtimeMoldes(data) {
             const container = document.getElementById('container-plan-realtime');
             if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No se registran marcas de moldes para el turno actual.</p>';
+                container.innerHTML = '<p>No se encontraron moldes para la selección aplicada.</p>';
                 return;
             }
 
@@ -629,11 +658,19 @@
             const texto = document.getElementById('filtro-plan-texto').value.toLowerCase();
             const equipo = document.getElementById('filtro-plan-equipo').value;
 
-            // Filtrar Realtime Moldes
+            // Filtrado dinámico multivariable para la vista de Ciclo de Moldes
             const moldesFiltrados = cacheEficienciaMoldes.filter(m => {
                 const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || m.n_molde.toString().includes(texto);
                 const coincideEquipo = (equipo === 'TODOS') || (m.equipo_planificacion === equipo);
-                return coincideTexto && coincideEquipo;
+                
+                let coincideKpi = true;
+                if (filtroEstadoKpiActivo === 'CRITICO') {
+                    coincideKpi = (m.alerta_productividad === '🚨 CRITICO');
+                } else if (filtroEstadoKpiActivo) {
+                    coincideKpi = (m.estado_flujo === filtroEstadoKpiActivo);
+                }
+
+                return coincideTexto && coincideEquipo && coincideKpi;
             });
             renderizarRealtimeMoldes(moldesFiltrados);
 
