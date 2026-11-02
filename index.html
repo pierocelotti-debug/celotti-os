@@ -204,7 +204,6 @@
         .btn-danger { background-color: var(--danger); color: white; }
         .btn:hover { opacity: 0.9; }
 
-        /* Estilos del Modal */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -220,7 +219,7 @@
             border: 1px solid var(--accent-teal);
             border-radius: 12px;
             width: 90%;
-            max-width: 500px;
+            max-width: 520px;
             padding: 24px;
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
@@ -293,16 +292,16 @@
             <div id="logistica-list" class="grid-cards">Cargando pendientes de despacho...</div>
         </div>
 
-        <!-- 5. SOLAPA BIENESTAR -->
+        <!-- 5. SOLAPA BIENESTAR ORGANIZACIONAL -->
         <div id="sec-bienestar" style="display: none;">
             <div class="kpi-container">
                 <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
-                    <div class="kpi-title">Promedio General Auditorías</div>
-                    <div class="kpi-value" id="kpi-bie-promedio" style="color: var(--accent-teal);">0%</div>
+                    <div class="kpi-title">Promedio General</div>
+                    <div class="kpi-value" id="kpi-bie-promedio" style="color: var(--accent-teal);">0.0%</div>
                 </div>
                 <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
-                    <div class="kpi-title">Operarios Auditados</div>
-                    <div class="kpi-value" id="kpi-bie-auditados" style="color: var(--blue-info);">0</div>
+                    <div class="kpi-title">Operarios Cobertura</div>
+                    <div class="kpi-value" id="kpi-bie-auditados" style="color: var(--blue-info);">0 / 0</div>
                 </div>
                 <div class="kpi-card" style="border-top: 3px solid var(--warning);">
                     <div class="kpi-title">Requieren Apoyo Teal</div>
@@ -313,7 +312,7 @@
             <div class="filter-bar">
                 <div class="filter-group">
                     <label>Buscar Operario:</label>
-                    <input type="text" id="filtro-bie-nombre" placeholder="Nombre de operario..." oninput="filtrarRankingBienestar()">
+                    <input type="text" id="filtro-bie-nombre" placeholder="Nombre del operario..." oninput="filtrarRankingBienestar()">
                 </div>
                 <div class="filter-group">
                     <label>Nivel de Desempeño:</label>
@@ -322,11 +321,12 @@
                         <option value="EXCELENTE">Excelente (>= 90%)</option>
                         <option value="CONSOLIDACION">Consolidación (70% - 89%)</option>
                         <option value="REQUIERE_APOYO">Requiere Apoyo (< 70%)</option>
+                        <option value="SIN_AUDITORIA">Sin Auditorías</option>
                     </select>
                 </div>
             </div>
 
-            <h3 style="color: var(--accent-teal); margin-bottom: 14px;">🏆 Ranking de Auditorías y Desempeño Org.</h3>
+            <h3 style="color: var(--accent-teal); margin-bottom: 14px;">🏆 Ranking y Cobertura de Personal</h3>
             <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
@@ -349,7 +349,7 @@
         </div>
     </div>
 
-    <!-- MODAL DRILL-DOWN PARA OPERARIOS -->
+    <!-- MODAL DRILL-DOWN PARA OPERARIOS CON TRIGGER N8N -->
     <div id="modal-operario" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -357,7 +357,8 @@
                 <span class="badge" id="modal-op-posicion">#0</span>
             </div>
             <div id="modal-op-body" style="font-size: 0.9rem; line-height: 1.6;"></div>
-            <div style="margin-top: 20px; text-align: right;">
+            <div style="margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="btn" style="background-color: var(--blue-info); color: white;" id="btn-gen-pdf">📄 Generar PDF (n8n)</button>
                 <button class="btn" onclick="cerrarModalOperario()">Cerrar</button>
             </div>
         </div>
@@ -366,6 +367,7 @@
     <script>
         const SUPABASE_URL = "https://vpomzjwmmfudgiahrqlk.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4";
+        const WEBHOOK_N8N_PDF = "https://n8n.celotti.com.ar/webhook/generar-reporte-bienestar";
 
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
@@ -576,67 +578,76 @@
         }
 
         /* -------------------------------------------------------------
-           5. SOLAPA BIENESTAR ORGANIZACIONAL (RANKING & DRILL-DOWN)
+           5. SOLAPA BIENESTAR ORGANIZACIONAL (SINGLE SOURCE OF TRUTH)
         ------------------------------------------------------------- */
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
+            container.innerHTML = '<p style="color: var(--text-muted);">Cargando nómina y auditorías desde Supabase...</p>';
+
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                    headers: { 
+                        'apikey': SUPABASE_ANON_KEY, 
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}` 
+                    }
                 });
+
+                if (!res.ok) {
+                    throw new Error(`Status ${res.status}: ${res.statusText}`);
+                }
+
                 cacheRankingBienestar = await res.json();
 
                 if (!Array.isArray(cacheRankingBienestar) || cacheRankingBienestar.length === 0) {
-                    container.innerHTML = '<p>Sin datos de auditorías de operarios registrados.</p>';
+                    container.innerHTML = '<p>No se encontraron operarios activos en la base de datos.</p>';
                     return;
                 }
 
-                // Cálculo de KPIs de Bienestar
-                const totalOps = cacheRankingBienestar.length;
-                const sumaPct = cacheRankingBienestar.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
-                const promGeneral = totalOps > 0 ? (sumaPct / totalOps).toFixed(1) : 0;
-                const requierenApoyo = cacheRankingBienestar.filter(o => o.nivel_desempeno === 'REQUIERE_APOYO').length;
-
-                document.getElementById('kpi-bie-promedio').innerText = `${promGeneral}%`;
-                document.getElementById('kpi-bie-auditados').innerText = totalOps;
-                document.getElementById('kpi-bie-apoyo').innerText = requierenApoyo;
-
+                actualizarKpisBienestar(cacheRankingBienestar);
                 renderizarRankingBienestar(cacheRankingBienestar);
+
             } catch (e) {
-                console.error("Error al cargar ranking de bienestar", e);
-                container.innerHTML = '<p>Error al obtener ranking de auditorías desde Supabase.</p>';
+                console.error("Error en módulo Bienestar:", e);
+                container.innerHTML = `<p style="color: var(--danger);">❌ Error de conexión al obtener el ranking: ${e.message}</p>`;
             }
+        }
+
+        function actualizarKpisBienestar(data) {
+            const totalOps = data.length;
+            const conAuditorias = data.filter(o => parseInt(o.total_auditorias) > 0);
+            const sumaPct = conAuditorias.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
+            const promGeneral = conAuditorias.length > 0 ? (sumaPct / conAuditorias.length).toFixed(1) : "0.0";
+            const requierenApoyo = data.filter(o => o.nivel_desempeno === 'REQUIERE_APOYO').length;
+
+            document.getElementById('kpi-bie-promedio').innerText = `${promGeneral}%`;
+            document.getElementById('kpi-bie-auditados').innerText = `${conAuditorias.length} / ${totalOps}`;
+            document.getElementById('kpi-bie-apoyo').innerText = requierenApoyo;
         }
 
         function renderizarRankingBienestar(data) {
             const container = document.getElementById('bienestar-list');
             if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No se encontraron operarios con el filtro seleccionado.</p>';
+                container.innerHTML = '<p>No hay coincidencias con el filtro aplicado.</p>';
                 return;
             }
 
             container.innerHTML = data.map(item => {
                 const pos = item.posicion_ranking;
+                const tieneAuditorias = parseInt(item.total_auditorias) > 0;
+                
                 let badgePosicion = `<span class="badge">#${pos}</span>`;
                 let borderColor = 'var(--border-color)';
 
-                if (pos === 1) {
-                    badgePosicion = `<span class="badge badge-gold">🥇 #1</span>`;
-                    borderColor = 'var(--gold)';
-                } else if (pos === 2) {
-                    badgePosicion = `<span class="badge badge-silver">🥈 #2</span>`;
-                    borderColor = 'var(--silver)';
-                } else if (pos === 3) {
-                    badgePosicion = `<span class="badge badge-bronze">🥉 #3</span>`;
-                    borderColor = 'var(--bronze)';
+                if (tieneAuditorias) {
+                    if (pos === 1) { badgePosicion = `<span class="badge badge-gold">🥇 #1</span>`; borderColor = 'var(--gold)'; }
+                    else if (pos === 2) { badgePosicion = `<span class="badge badge-silver">🥈 #2</span>`; borderColor = 'var(--silver)'; }
+                    else if (pos === 3) { badgePosicion = `<span class="badge badge-bronze">🥉 #3</span>`; borderColor = 'var(--bronze)'; }
                 }
 
-                let badgeNivel = `<span class="badge badge-success">EXCELENTE</span>`;
-                if (item.nivel_desempeno === 'CONSOLIDACION') {
-                    badgeNivel = `<span class="badge badge-info">CONSOLIDACIÓN</span>`;
-                } else if (item.nivel_desempeno === 'REQUIERE_APOYO') {
-                    badgeNivel = `<span class="badge badge-warning">REQUIERE APOYO</span>`;
-                }
+                let badgeNivel = `<span class="badge badge-info">SIN AUDITAR</span>`;
+                if (item.nivel_desempeno === 'EXCELENTE') badgeNivel = `<span class="badge badge-success">EXCELENTE</span>`;
+                else if (item.nivel_desempeno === 'CONSOLIDACION') badgeNivel = `<span class="badge badge-info">CONSOLIDACIÓN</span>`;
+                else if (item.nivel_desempeno === 'REQUIERE_APOYO') badgeNivel = `<span class="badge badge-warning">REQUIERE APOYO</span>`;
 
                 return `
                     <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleOperario(${item.persona_id})">
@@ -644,12 +655,18 @@
                             <span>${item.Operario}</span>
                             ${badgePosicion}
                         </div>
-                        <p style="margin: 4px 0;"><strong>Promedio:</strong> <span style="font-size: 1.2rem; color: var(--accent-teal);">${item.cumplimiento_promedio_pct}%</span> <small>(${item.puntaje_promedio} / 10)</small></p>
-                        <p><small>👥 <strong>Equipos:</strong> ${item.Equipos || 'Sin Asignar'}</small></p>
-                        <p><small>📊 <strong>Total Auditorías:</strong> ${item.total_auditorias}</small></p>
+                        <p style="margin: 4px 0;">
+                            <strong>Promedio:</strong> 
+                            <span style="font-size: 1.2rem; color: ${tieneAuditorias ? 'var(--accent-teal)' : 'var(--text-muted)'};">
+                                ${tieneAuditorias ? item.cumplimiento_promedio_pct + '%' : 'S/D'}
+                            </span> 
+                            <small>(${item.puntaje_promedio} / 10)</small>
+                        </p>
+                        <p><small>👥 <strong>Equipo:</strong> ${item.Equipos || 'General'}</small></p>
+                        <p><small>📊 <strong>Auditorías:</strong> ${item.total_auditorias}</small></p>
                         <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
                             ${badgeNivel}
-                            <small style="color: var(--text-muted);">Ver historial ➔</small>
+                            <small style="color: var(--text-muted);">Detalle ➔</small>
                         </div>
                     </div>
                 `;
@@ -677,7 +694,7 @@
             document.getElementById('modal-op-posicion').innerText = `Puesto Ranking: #${op.posicion_ranking}`;
 
             const historialFormateado = (op.historial_puntajes || '').split(' | ').join(' -> ');
-            const fechaUltima = op.ultima_auditoria_fecha ? new Date(op.ultima_auditoria_fecha).toLocaleDateString('es-AR') : 'N/A';
+            const fechaUltima = op.ultima_auditoria_fecha ? new Date(op.ultima_auditoria_fecha).toLocaleDateString('es-AR') : 'Sin registros';
 
             document.getElementById('modal-op-body').innerHTML = `
                 <p><strong>Puntaje Promedio:</strong> ${op.puntaje_promedio} / 10 (${op.cumplimiento_promedio_pct}%)</p>
@@ -691,11 +708,50 @@
                 <p><small style="color: var(--text-muted);">Última Auditoría realizada: ${fechaUltima}</small></p>
             `;
 
+            const btnPdf = document.getElementById('btn-gen-pdf');
+            btnPdf.onclick = () => dispararGeneracionPDF(op.Operario, op.Equipos, op.puntaje_promedio, op.nivel_desempeno);
+
             document.getElementById('modal-operario').style.display = 'flex';
         }
 
         function cerrarModalOperario() {
             document.getElementById('modal-operario').style.display = 'none';
+        }
+
+        async function dispararGeneracionPDF(operario, equipo, nota, desempeno) {
+            const btn = document.getElementById('btn-gen-pdf');
+            btn.disabled = true;
+            btn.innerText = "⏳ Procesando en n8n...";
+
+            const payload = {
+                operario: operario.trim(),
+                equipo: (equipo || 'General').trim(),
+                puesto: 'Operario',
+                nota: nota,
+                desempeño: desempeno,
+                comentarios: `Reporte generado desde Celotti OS. Promedio de auditoría: ${nota}/10.`,
+                fecha: new Date().toISOString().split('T')[0]
+            };
+
+            try {
+                const res = await fetch(WEBHOOK_N8N_PDF, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert(`✅ Solicitud enviada a n8n. El PDF se adjuntará en Odoo y se enviará por Telegram.`);
+                } else {
+                    alert(`⚠️ Error en n8n al procesar el PDF (Status ${res.status}).`);
+                }
+            } catch (err) {
+                console.error("Error disparando Webhook de n8n:", err);
+                alert("❌ Error de conexión con el servidor de automatización n8n.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "📄 Generar PDF (n8n)";
+            }
         }
 
         async function cargarIndicadoresData() {
