@@ -449,21 +449,56 @@
             <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
-        <!-- 6. SOLAPA INDICADORES -->
+        <!-- 6. SOLAPA INDICADORES REALTIME (10 KPIS ESTRATÉGICOS) -->
         <div id="sec-indicadores" style="display: none;">
-            <div class="kpi-container">
-                <div class="kpi-card">
-                    <div class="kpi-title">Moldes Activos</div>
-                    <div class="kpi-value" id="kpi-ind-moldes" style="color: var(--accent-teal);">0</div>
+            <div class="kpi-container" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">1. Disponibilidad Moldes</div>
+                    <div class="kpi-value" id="kpi-ind-disponibilidad" style="color: var(--accent-teal);">0%</div>
                 </div>
-                <div class="kpi-card">
-                    <div class="kpi-title">OTs Pendientes</div>
-                    <div class="kpi-value" id="kpi-ind-ots" style="color: var(--warning);">0</div>
+                <div class="kpi-card" style="border-top: 3px solid var(--danger);">
+                    <div class="kpi-title">2. Alertas RFID Críticas</div>
+                    <div class="kpi-value" id="kpi-ind-alertas-rfid" style="color: var(--danger);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                    <div class="kpi-title">3. Backlog Pendiente Odoo</div>
+                    <div class="kpi-value" id="kpi-ind-backlog" style="color: var(--warning);">0 pzas</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">4. Moldes Llenados Hoy</div>
+                    <div class="kpi-value" id="kpi-ind-llenados" style="color: var(--accent-teal);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--danger);">
+                    <div class="kpi-title">5. Calidad: Casos Abiertos</div>
+                    <div class="kpi-value" id="kpi-ind-cal-abiertos" style="color: var(--danger);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                    <div class="kpi-title">6. MTTR Calidad (Promedio)</div>
+                    <div class="kpi-value" id="kpi-ind-mttr-calidad" style="color: var(--blue-info);">0h</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                    <div class="kpi-title">7. Mantenimiento Pendiente</div>
+                    <div class="kpi-value" id="kpi-ind-mant-abiertas" style="color: var(--warning);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                    <div class="kpi-title">8. Operarios Auditados</div>
+                    <div class="kpi-value" id="kpi-ind-ops-auditados" style="color: var(--blue-info);">0</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">9. Salud Org. (Teal Index)</div>
+                    <div class="kpi-value" id="kpi-ind-salud-teal" style="color: var(--accent-teal);">0.0%</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--gold);">
+                    <div class="kpi-title">10. Despachos Pendientes</div>
+                    <div class="kpi-value" id="kpi-ind-despachos" style="color: var(--gold);">0 SO</div>
                 </div>
             </div>
-            <div class="card">
-                <h3 style="margin-top:0; color: var(--accent-teal);">Avance Global Teal</h3>
-                <p>Dashboard de control operativo en tiempo real.</p>
+
+            <div class="card" style="margin-top: 20px;">
+                <h3 style="margin-top:0; color: var(--accent-teal);">📊 Visión Holística Operativa Celotti SRL</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">
+                    Monitoreo en vivo alimentado por la arquitectura de Webhooks de n8n, lecturas RFID en puestos de desmolde/llenado y PostgreSQL en Supabase.
+                </p>
             </div>
         </div>
     </div>
@@ -553,7 +588,7 @@
                 document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
                 cargarBienestarData();
             } else if(tab === 'indicadores') {
-                document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Teal';
+                document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Realtime Teal';
                 cargarIndicadoresData();
             }
         }
@@ -578,7 +613,7 @@
         }
 
         /* -------------------------------------------------------------
-           1. SOLAPA PLANIFICACIÓN (MONITOREO DE MOLDES INTERACTIVO)
+           1. SOLAPA PLANIFICACIÓN
         ------------------------------------------------------------- */
         async function cargarPlanificacionData() {
             try {
@@ -834,7 +869,7 @@
         }
 
         /* -------------------------------------------------------------
-           2. SOLAPA CALIDAD & DESMOLDE (FOTOS INTEGRADAS EN TARJETAS)
+           2. SOLAPA CALIDAD & DESMOLDE
         ------------------------------------------------------------- */
         async function cargarCalidadData() {
             try {
@@ -966,7 +1001,7 @@
         }
 
         /* -------------------------------------------------------------
-           3. SOLAPA MANTENIMIENTO & MEJORAS (REGISTRO_MEJORAS)
+           3. SOLAPA MANTENIMIENTO & MEJORAS
         ------------------------------------------------------------- */
         async function cargarProcesosData() {
             try {
@@ -1122,7 +1157,7 @@
         }
 
         /* -------------------------------------------------------------
-           5. SOLAPA BIENESTAR ORGANIZACIONAL (SINGLE SOURCE OF TRUTH)
+           5. SOLAPA BIENESTAR ORGANIZACIONAL
         ------------------------------------------------------------- */
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
@@ -1298,9 +1333,79 @@
             }
         }
 
+        /* -------------------------------------------------------------
+           6. SOLAPA INDICADORES EN TIEMPO REAL (10 KPIS REALTIME)
+        ------------------------------------------------------------- */
         async function cargarIndicadoresData() {
-            document.getElementById('kpi-ind-moldes').innerText = cacheMoldesPlanificacion.filter(m => (m.Estado || '').toUpperCase() === 'SI').length || 0;
-            document.getElementById('kpi-ind-ots').innerText = cacheDemandaOdoo.length || 0;
+            try {
+                // Carga masiva en paralelo si no están cacheadas
+                if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0) {
+                    const [resEf, resCal, resMant, resBien] = await Promise.all([
+                        fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
+                        fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
+                        fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
+                        fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                    ]);
+
+                    cacheEficienciaMoldes = await resEf.json();
+                    cacheCalidad = await resCal.json();
+                    cacheMantenimiento = await resMant.json();
+                    cacheRankingBienestar = await resBien.json();
+                }
+
+                // 1. Disponibilidad Moldes (%)
+                const totalMoldes = cacheEficienciaMoldes.length || 1;
+                const moldesEnProduccion = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'ARMANDO' || m.estado_flujo === 'POR LLENAR' || m.estado_flujo === 'FINALIZADO').length;
+                const disponibilidadPct = ((moldesEnProduccion / totalMoldes) * 100).toFixed(1);
+                document.getElementById('kpi-ind-disponibilidad').innerText = `${disponibilidadPct}%`;
+
+                // 2. Alertas Críticas RFID
+                const alertasCriticas = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
+                document.getElementById('kpi-ind-alertas-rfid').innerText = alertasCriticas;
+
+                // 3. Backlog Pendiente Odoo (Cant. total de piezas)
+                const totalPiezasPendientes = cacheDemandaOdoo.reduce((acc, curr) => acc + (parseInt(curr.cant_pendiente) || 0), 0);
+                document.getElementById('kpi-ind-backlog').innerText = `${totalPiezasPendientes} pzas`;
+
+                // 4. Moldes Llenados Hoy
+                const llenadosHoy = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO').length;
+                document.getElementById('kpi-ind-llenados').innerText = llenadosHoy;
+
+                // 5. Incidencias de Calidad Abiertas
+                const calAbiertas = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
+                document.getElementById('kpi-ind-cal-abiertos').innerText = calAbiertas;
+
+                // 6. MTTR Calidad (Horas Promedio de Resolución de casos cerrados)
+                const casosCerradosCalidad = cacheCalidad.filter(c => (c.estado === 'Resuelto' || c.estado === 'Cerrado') && c.fecha_reporte && c.fecha_resolucion);
+                let sumaHorasCal = 0;
+                casosCerradosCalidad.forEach(c => {
+                    const diff = (new Date(c.fecha_resolucion) - new Date(c.fecha_reporte)) / (1000 * 60 * 60);
+                    if (diff > 0) sumaHorasCal += diff;
+                });
+                const mttrCalidad = casosCerradosCalidad.length > 0 ? (sumaHorasCal / casosCerradosCalidad.length).toFixed(1) : "0.0";
+                document.getElementById('kpi-ind-mttr-calidad').innerText = `${mttrCalidad}h`;
+
+                // 7. Mantenimiento Pendiente
+                const mantAbiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
+                document.getElementById('kpi-ind-mant-abiertas').innerText = mantAbiertas;
+
+                // 8. Operarios Cobertura Auditados
+                const opsAuditados = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0).length;
+                document.getElementById('kpi-ind-ops-auditados').innerText = `${opsAuditados} / ${cacheRankingBienestar.length}`;
+
+                // 9. Salud Org. (Teal Index - Promedio de Cumplimiento)
+                const opsConAud = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0);
+                const sumaTeal = opsConAud.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
+                const tealIndex = opsConAud.length > 0 ? (sumaTeal / opsConAud.length).toFixed(1) : "0.0";
+                document.getElementById('kpi-ind-salud-teal').innerText = `${tealIndex}%`;
+
+                // 10. Despachos Pendientes (Órdenes SO activas)
+                const despachosPendientes = cacheDemandaOdoo.filter(d => (parseInt(d.cant_pendiente) || 0) > 0).length;
+                document.getElementById('kpi-ind-despachos').innerText = `${despachosPendientes} SO`;
+
+            } catch (err) {
+                console.error("Error al consolidar Indicadores Realtime:", err);
+            }
         }
 
         // Carga inicial
