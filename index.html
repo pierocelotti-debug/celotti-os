@@ -171,6 +171,9 @@
             padding: 18px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             transition: transform 0.2s, border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
         .card-interactive {
             cursor: pointer;
@@ -215,6 +218,29 @@
         .btn-danger { background-color: var(--danger); color: white; }
         .btn:hover { opacity: 0.9; }
 
+        .card-img-container {
+            width: 100%;
+            height: 160px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 10px 0;
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .no-img-placeholder {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -236,12 +262,13 @@
             max-height: 90vh;
             overflow-y: auto;
         }
-        .img-preview {
+        .img-preview-modal {
             width: 100%;
-            max-height: 280px;
-            object-fit: cover;
+            max-height: 320px;
+            object-fit: contain;
             border-radius: 8px;
             margin-top: 12px;
+            background-color: var(--bg-dark);
             border: 1px solid var(--border-color);
         }
 
@@ -353,7 +380,7 @@
                     <div class="kpi-value" id="kpi-cal-proceso" style="color: var(--warning);">0</div>
                 </div>
                 <div class="kpi-card kpi-card-interactive" id="kpi-cal-card-resuelto" style="border-top: 3px solid var(--accent-teal);" onclick="filtrarCalidadKpi('Resuelto')">
-                    <div class="kpi-title">Resueltos</div>
+                    <div class="kpi-title">Resueltos / Cerrados</div>
                     <div class="kpi-value" id="kpi-cal-resueltos" style="color: var(--accent-teal);">0</div>
                 </div>
             </div>
@@ -531,7 +558,6 @@
             }
         }
 
-        // Función auxiliar para calcular tiempos de resolución/duración
         function calcularTiempoResolucion(fechaInicio, fechaFin) {
             if (!fechaInicio) return "N/A";
             const inicio = new Date(fechaInicio);
@@ -808,7 +834,7 @@
         }
 
         /* -------------------------------------------------------------
-           2. SOLAPA CALIDAD & DESMOLDE (VISTA_GESTION_CALIDAD_APP)
+           2. SOLAPA CALIDAD & DESMOLDE (FOTOS INTEGRADAS EN TARJETAS)
         ------------------------------------------------------------- */
         async function cargarCalidadData() {
             try {
@@ -819,9 +845,9 @@
 
                 if (!Array.isArray(cacheCalidad)) cacheCalidad = [];
 
-                const abiertos = cacheCalidad.filter(c => c.estado === 'Abierto' && !c.fecha_toma_caso).length;
-                const enProceso = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.fecha_toma_caso).length;
-                const resueltos = cacheCalidad.filter(c => c.estado === 'Resuelto').length;
+                const abiertos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
+                const enProceso = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso).length;
+                const resueltos = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado').length;
 
                 document.getElementById('kpi-cal-abiertos').innerText = abiertos;
                 document.getElementById('kpi-cal-proceso').innerText = enProceso;
@@ -847,11 +873,11 @@
 
             let filtrados = cacheCalidad;
             if (filtroCalidadKpiActivo === 'Abierto') {
-                filtrados = cacheCalidad.filter(c => c.estado === 'Abierto' && !c.fecha_toma_caso);
+                filtrados = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso);
             } else if (filtroCalidadKpiActivo === 'En Proceso') {
-                filtrados = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.fecha_toma_caso);
+                filtrados = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso);
             } else if (filtroCalidadKpiActivo === 'Resuelto') {
-                filtrados = cacheCalidad.filter(c => c.estado === 'Resuelto');
+                filtrados = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado');
             }
 
             renderizarCalidad(filtrados);
@@ -869,9 +895,10 @@
                 let badgeClass = 'badge-danger';
                 let borderColor = 'var(--danger)';
 
-                if (item.estado === 'Resuelto') {
+                if (item.estado === 'Resuelto' || item.estado === 'Cerrado') {
                     badgeClass = 'badge-success';
                     borderColor = 'var(--accent-teal)';
+                    estadoVisual = 'Resuelto';
                 } else if (item.fecha_toma_caso) {
                     estadoVisual = 'En Proceso';
                     badgeClass = 'badge-warning';
@@ -880,18 +907,25 @@
 
                 const duracion = calcularTiempoResolucion(item.fecha_reporte, item.fecha_resolucion);
 
+                const imagenHtml = item.archivo_url 
+                    ? `<div class="card-img-container"><img src="${item.archivo_url}" class="card-img" alt="Foto Incidencia Calidad" loading="lazy"></div>`
+                    : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin evidencia fotográfica</span></div>`;
+
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleCalidad(${item.id})">
-                        <div class="card-header">
-                            <span>Incidencia #${item.id}</span>
-                            <span class="badge ${badgeClass}">${estadoVisual}</span>
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleCalidad('${item.id}')">
+                        <div>
+                            <div class="card-header">
+                                <span>Incidencia Calidad</span>
+                                <span class="badge ${badgeClass}">${estadoVisual}</span>
+                            </div>
+                            ${imagenHtml}
+                            <p style="font-weight:600; margin: 6px 0; font-size: 0.95rem;">${item.descripcion_problema}</p>
+                            <p style="margin: 2px 0;"><small>👤 <strong>Auditor:</strong> ${item.auditor || 'Calidad Celotti'}</small></p>
+                            <p style="margin: 2px 0;"><small>🛠️ <strong>Responsable:</strong> ${item.responsable_calidad || 'Sin Asignar'}</small></p>
                         </div>
-                        <p style="font-weight:600; margin: 4px 0;">${item.descripcion_problema}</p>
-                        <p><small>👤 <strong>Auditor:</strong> ${item.auditor || 'Planta'}</small></p>
-                        <p><small>🛠️ <strong>Responsable:</strong> ${item.responsable_calidad || 'Sin Asignar'}</small></p>
-                        <div style="margin-top:8px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between;">
-                            <span>⏱️ Tiempo: <strong>${duracion}</strong></span>
-                            <span>Ver Ficha ➔</span>
+                        <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border-color); padding-top: 8px;">
+                            <span>⏱️ <strong>${duracion}</strong></span>
+                            <span style="color: var(--accent-teal); font-weight: 600;">Ver Ficha ➔</span>
                         </div>
                     </div>
                 `;
@@ -903,34 +937,36 @@
             if (!c) return;
 
             let estadoVisual = c.estado || 'Abierto';
-            if (c.estado !== 'Resuelto' && c.fecha_toma_caso) estadoVisual = 'En Proceso';
+            if (c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso) estadoVisual = 'En Proceso';
 
-            document.getElementById('modal-det-titulo').innerText = `Calidad #${c.id} - ${c.origen_reporte || 'Planta'}`;
+            document.getElementById('modal-det-titulo').innerText = `Incidencia Calidad`;
             document.getElementById('modal-det-badge').innerText = estadoVisual;
 
             const tiempoResolucion = calcularTiempoResolucion(c.fecha_reporte, c.fecha_resolucion);
-            const fechaToma = c.fecha_toma_caso ? new Date(c.fecha_toma_caso).toLocaleString('es-AR') : 'Sin tomar';
-            const fechaCierre = c.fecha_resolucion ? new Date(c.fecha_resolucion).toLocaleString('es-AR') : 'Pendiente de resolución';
+            const fechaToma = c.fecha_toma_caso ? new Date(c.fecha_toma_caso).toLocaleString('es-AR') : 'Sin tomar por el responsable';
+            const fechaCierre = c.fecha_resolucion ? new Date(c.fecha_resolucion).toLocaleString('es-AR') : 'Caso Abierto / En proceso';
 
             document.getElementById('modal-det-body').innerHTML = `
-                <p><strong>Descripción:</strong> ${c.descripcion_problema}</p>
+                <p><strong>ID Incidencia:</strong> <code>${c.id}</code></p>
+                <p><strong>Descripción del Problema:</strong> ${c.descripcion_problema}</p>
+                <p><strong>Origen del Reporte:</strong> ${c.origen_reporte || 'Calidad'}</p>
+                <p><strong>Auditor:</strong> ${c.auditor}</p>
                 <p><strong>Operario en Puesto:</strong> ${c.operario || 'N/A'}</p>
-                <p><strong>Auditor Responsable:</strong> ${c.auditor}</p>
                 <p><strong>Responsable Asignado:</strong> ${c.responsable_calidad || 'Sin Asignar'}</p>
-                <p><strong>Tiempo de Resolución:</strong> <span style="color: var(--accent-teal); font-weight:700;">${tiempoResolucion}</span></p>
+                <p><strong>Tiempo de Resolución / Transcurrido:</strong> <span style="color: var(--accent-teal); font-weight:700;">${tiempoResolucion}</span></p>
                 <hr style="border-color: var(--border-color); margin: 12px 0;">
                 <p><small style="color:var(--text-muted);">📅 Reportado: ${c.fecha_formateada || c.fecha_reporte}</small></p>
                 <p><small style="color:var(--text-muted);">🛠️ Toma de Caso: ${fechaToma}</small></p>
-                <p><small style="color:var(--text-muted);">✅ Cierre: ${fechaCierre}</small></p>
+                <p><small style="color:var(--text-muted);">✅ Cierre de Incidencia: ${fechaCierre}</small></p>
                 ${c.comentario_mejora ? `<p><strong>Comentario de Cierre:</strong> ${c.comentario_mejora}</p>` : ''}
-                ${c.archivo_url ? `<img src="${c.archivo_url}" class="img-preview" alt="Foto Incidencia">` : '<p><em>Sin foto adjunta.</em></p>'}
+                ${c.archivo_url ? `<img src="${c.archivo_url}" class="img-preview-modal" alt="Foto Incidencia Ampliada">` : '<p><em>Sin foto adjunta.</em></p>'}
             `;
 
             document.getElementById('modal-detalle').style.display = 'flex';
         }
 
         /* -------------------------------------------------------------
-           3. SOLAPA MANTENIMIENTO & MEJORAS (TABLA REGISTRO_MEJORAS)
+           3. SOLAPA MANTENIMIENTO & MEJORAS (REGISTRO_MEJORAS)
         ------------------------------------------------------------- */
         async function cargarProcesosData() {
             try {
@@ -1003,18 +1039,25 @@
 
                 const duracion = calcularTiempoResolucion(item.fecha_creacion, item.fecha_cierre);
 
+                const imagenHtml = item.url_foto 
+                    ? `<div class="card-img-container"><img src="${item.url_foto}" class="card-img" alt="Foto Mantenimiento" loading="lazy"></div>`
+                    : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin foto adjunta</span></div>`;
+
                 return `
                     <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleMantenimiento(${item.id})">
-                        <div class="card-header">
-                            <span>OT #${item.id}</span>
-                            <span class="badge ${badgeClass}">${estadoVisual}</span>
+                        <div>
+                            <div class="card-header">
+                                <span>OT #${item.id}</span>
+                                <span class="badge ${badgeClass}">${estadoVisual}</span>
+                            </div>
+                            ${imagenHtml}
+                            <p style="font-weight:600; margin: 6px 0; font-size: 0.95rem;">${item.descripcion || 'Sin descripción'}</p>
+                            <p style="margin: 2px 0;"><small>⚙️ <strong>Área:</strong> ${item.area || 'Planta'}</small></p>
+                            <p style="margin: 2px 0;"><small>🚨 <strong>Urgencia:</strong> ${item.urgencia || 'Normal'}</small></p>
                         </div>
-                        <p style="font-weight:600; margin: 4px 0;">${item.descripcion || 'Sin descripción'}</p>
-                        <p><small>⚙️ <strong>Área:</strong> ${item.area || 'Planta'}</small></p>
-                        <p><small>🚨 <strong>Urgencia:</strong> ${item.urgencia || 'Normal'}</small></p>
-                        <div style="margin-top:8px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between;">
-                            <span>⏱️ Duración: <strong>${duracion}</strong></span>
-                            <span>Ver Foto/Ficha ➔</span>
+                        <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border-color); padding-top: 8px;">
+                            <span>⏱️ <strong>${duracion}</strong></span>
+                            <span style="color: var(--accent-teal); font-weight: 600;">Ver Ficha ➔</span>
                         </div>
                     </div>
                 `;
@@ -1032,7 +1075,7 @@
             document.getElementById('modal-det-badge').innerText = estadoVisual;
 
             const tiempoResolucion = calcularTiempoResolucion(m.fecha_creacion, m.fecha_cierre);
-            const fechaToma = m.fecha_toma ? new Date(m.fecha_toma).toLocaleString('es-AR') : 'Sin tomar';
+            const fechaToma = m.fecha_toma ? new Date(m.fecha_toma).toLocaleString('es-AR') : 'Sin tomar por equipo técnico';
             const fechaCierre = m.fecha_cierre ? new Date(m.fecha_cierre).toLocaleString('es-AR') : 'En ejecución';
 
             document.getElementById('modal-det-body').innerHTML = `
@@ -1045,7 +1088,7 @@
                 <p><small style="color:var(--text-muted);">🛠️ Inicio de Trabajo: ${fechaToma}</small></p>
                 <p><small style="color:var(--text-muted);">✅ Cierre Técnico: ${fechaCierre}</small></p>
                 ${m.comentario_cierre ? `<p><strong>Comentario de Cierre:</strong> ${m.comentario_cierre}</p>` : ''}
-                ${m.url_foto ? `<img src="${m.url_foto}" class="img-preview" alt="Foto Mantenimiento">` : '<p><em>Sin foto adjunta.</em></p>'}
+                ${m.url_foto ? `<img src="${m.url_foto}" class="img-preview-modal" alt="Foto Mantenimiento Ampliada">` : '<p><em>Sin foto adjunta.</em></p>'}
             `;
 
             document.getElementById('modal-detalle').style.display = 'flex';
