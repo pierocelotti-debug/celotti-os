@@ -82,6 +82,28 @@
             background-color: var(--panel-bg);
             color: var(--accent-teal);
         }
+        .nav-sub-item {
+            padding: 8px 12px 8px 36px;
+            border-radius: 6px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-sub-item:hover, .nav-sub-item.active {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--accent-teal);
+        }
+        .sub-menu {
+            display: none;
+            flex-direction: column;
+            margin-bottom: 6px;
+        }
         .main-content {
             flex: 1;
             padding: 28px;
@@ -335,7 +357,17 @@
     <div class="sidebar">
         <div class="brand">🏭 CELOTTI OS</div>
         <div class="nav-item active" onclick="switchTab('planificacion')">📦 Planificación</div>
-        <div class="nav-item" onclick="switchTab('calidad')">⚠️ Calidad & Moldes</div>
+        
+        <!-- CALIDAD DESPLEGABLE -->
+        <div class="nav-item" id="nav-parent-calidad" onclick="toggleSubmenuCalidad()">
+            <span>⚠️ Calidad & Moldes</span>
+            <span id="arrow-calidad" style="margin-left: auto; font-size: 0.7rem;">▼</span>
+        </div>
+        <div class="sub-menu" id="submenu-calidad">
+            <div class="nav-sub-item active" id="sub-moldes-criticos" onclick="switchCalidadSubTab('REPORTE_DESMOLDE')">🧱 Moldes Críticos (Ranking)</div>
+            <div class="nav-sub-item" id="sub-incidencias" onclick="switchCalidadSubTab('INCIDENCIAS')">⚠️ Incidencias Abiertas (App)</div>
+        </div>
+
         <div class="nav-item" onclick="switchTab('mantenimiento')">⚙️ Mantenimiento</div>
         <div class="nav-item" onclick="switchTab('logistica')">🚛 Logística & Despacho</div>
         <div class="nav-item" onclick="switchTab('bienestar')">🌱 Bienestar Org.</div>
@@ -375,7 +407,6 @@
                 </div>
             </div>
 
-            <!-- KPIs INTERACTIVOS MOLDES -->
             <div class="kpi-container" id="kpis-plan-moldes">
                 <div class="kpi-card kpi-card-interactive" id="kpi-card-finalizados" style="border-top: 3px solid var(--accent-teal);" onclick="seleccionarFiltroKpi('FINALIZADO')">
                     <div class="kpi-title">Moldes Finalizados</div>
@@ -403,13 +434,6 @@
         <!-- 2. SOLAPA CALIDAD & DESMOLDE -->
         <div id="sec-calidad" style="display: none;">
             <div class="filter-bar">
-                <div class="filter-group">
-                    <label>Ver Vista Calidad:</label>
-                    <select id="filtro-calidad-vista" onchange="toggleVistaCalidad()">
-                        <option value="REPORTE_DESMOLDE">🧱 Reporte de Desmolde por Molde (Ranking Defectos)</option>
-                        <option value="INCIDENCIAS">⚠️ Incidencias Abiertas (App)</option>
-                    </select>
-                </div>
                 <div class="filter-group" id="group-filtro-desmolde">
                     <label>Buscar por N° Molde o Modelo:</label>
                     <input type="text" id="filtro-desmolde-texto" placeholder="Ej: 31, Paviuso, Multiuso..." oninput="filtrarReporteDesmolde()">
@@ -432,14 +456,14 @@
                 </div>
             </div>
 
-            <!-- VISTA: RANKING DESMOLDE -->
+            <!-- VISTA 1: RANKING DESMOLDE Y MOLDES CRÍTICOS -->
             <div id="container-calidad-desmolde" class="grid-cards">Cargando reporte de desmolde por molde...</div>
 
-            <!-- VISTA: INCIDENCIAS ABIERTAS -->
+            <!-- VISTA 2: INCIDENCIAS ABIERTAS APP -->
             <div id="calidad-list" class="grid-cards" style="display: none;">Cargando registros de calidad...</div>
         </div>
 
-        <!-- 3. SOLAPA MANTENIMIENTO & MEJORAS -->
+        <!-- 3. SOLAPA MANTENIMIENTO -->
         <div id="sec-mantenimiento" style="display: none;">
             <div class="kpi-container">
                 <div class="kpi-card kpi-card-interactive" id="kpi-mant-card-abierta" style="border-top: 3px solid var(--danger);" onclick="filtrarMantenimientoKpi('Abierta')">
@@ -565,7 +589,7 @@
         </div>
     </div>
 
-    <!-- MODAL POP-UP DRILL-DOWN DETALLE DE DESMOLDE -->
+    <!-- MODAL POP-UP DRILL-DOWN DETALLE DE DESMOLDE CON TRAZABILIDAD (RECUPERADO) -->
     <div id="modal-desmolde" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -579,7 +603,7 @@
         </div>
     </div>
 
-    <!-- MODAL ORIGEN DE DATOS KPI (DRILL-DOWN) -->
+    <!-- MODAL ORIGEN DE DATOS KPI -->
     <div id="modal-kpi-origen" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -593,7 +617,7 @@
         </div>
     </div>
 
-    <!-- MODAL DETALLE GENÉRICO (CALIDAD / MANTENIMIENTO) -->
+    <!-- MODAL DETALLE GENÉRICO -->
     <div id="modal-detalle" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -607,7 +631,7 @@
         </div>
     </div>
 
-    <!-- MODAL TRAZA DETALLADA DE MOLDE RFID -->
+    <!-- MODAL TRAZA MOLDE RFID -->
     <div id="modal-molde" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -621,7 +645,7 @@
         </div>
     </div>
 
-    <!-- MODAL BIENESTAR ORGANIZACIONAL -->
+    <!-- MODAL OPERARIO BIENESTAR -->
     <div id="modal-operario" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -653,6 +677,40 @@
         let filtroEstadoKpiActivo = null;
         let filtroCalidadKpiActivo = null;
         let filtroMantKpiActivo = null;
+
+        function toggleSubmenuCalidad() {
+            const submenu = document.getElementById('submenu-calidad');
+            const arrow = document.getElementById('arrow-calidad');
+            const isVisible = submenu.style.display === 'flex';
+            
+            submenu.style.display = isVisible ? 'none' : 'flex';
+            arrow.innerText = isVisible ? '▼' : '▲';
+            switchTab('calidad');
+        }
+
+        function switchCalidadSubTab(vista) {
+            document.querySelectorAll('.nav-sub-item').forEach(e => e.classList.remove('active'));
+            const containerDesmolde = document.getElementById('container-calidad-desmolde');
+            const containerIncidencias = document.getElementById('calidad-list');
+            const kpisIncidencias = document.getElementById('kpis-calidad-incidencias');
+            const groupFiltro = document.getElementById('group-filtro-desmolde');
+
+            if (vista === 'REPORTE_DESMOLDE') {
+                document.getElementById('sub-moldes-criticos').classList.add('active');
+                document.getElementById('tab-title').innerText = 'Calidad: Reporte de Desmolde por Molde';
+                containerDesmolde.style.display = 'grid';
+                containerIncidencias.style.display = 'none';
+                kpisIncidencias.style.display = 'none';
+                groupFiltro.style.display = 'flex';
+            } else {
+                document.getElementById('sub-incidencias').classList.add('active');
+                document.getElementById('tab-title').innerText = 'Calidad: Incidencias Abiertas App';
+                containerDesmolde.style.display = 'none';
+                containerIncidencias.style.display = 'grid';
+                kpisIncidencias.style.display = 'grid';
+                groupFiltro.style.display = 'none';
+            }
+        }
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
@@ -704,9 +762,7 @@
             return `${mins} min`;
         }
 
-        /* -------------------------------------------------------------
-           1. SOLAPA PLANIFICACIÓN
-        ------------------------------------------------------------- */
+        /* 1. PLANIFICACIÓN */
         async function cargarPlanificacionData() {
             try {
                 const [resEficiencia, resDemanda, resMoldes] = await Promise.all([
@@ -725,33 +781,15 @@
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
             } catch (e) { 
                 console.error("Error al cargar datos de planificación", e);
-                document.getElementById('container-plan-realtime').innerHTML = '<p style="color: var(--danger);">Error al conectar con Supabase.</p>';
             }
         }
 
         function toggleVistaPlanificacion() {
             const vista = document.getElementById('filtro-plan-vista').value;
-            const containerRealtime = document.getElementById('container-plan-realtime');
-            const containerDemanda = document.getElementById('container-plan-demanda');
-            const containerMoldes = document.getElementById('container-plan-moldes');
-            const kpisMoldes = document.getElementById('kpis-plan-moldes');
-
-            if (vista === 'MONITOREO_REALTIME') {
-                containerRealtime.style.display = 'grid';
-                containerDemanda.style.display = 'none';
-                containerMoldes.style.display = 'none';
-                kpisMoldes.style.display = 'grid';
-            } else if (vista === 'DEMANDA') {
-                containerRealtime.style.display = 'none';
-                containerDemanda.style.display = 'grid';
-                containerMoldes.style.display = 'none';
-                kpisMoldes.style.display = 'none';
-            } else {
-                containerRealtime.style.display = 'none';
-                containerDemanda.style.display = 'none';
-                containerMoldes.style.display = 'grid';
-                kpisMoldes.style.display = 'none';
-            }
+            document.getElementById('container-plan-realtime').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
+            document.getElementById('container-plan-demanda').style.display = vista === 'DEMANDA' ? 'grid' : 'none';
+            document.getElementById('container-plan-moldes').style.display = vista === 'MOLDES' ? 'grid' : 'none';
+            document.getElementById('kpis-plan-moldes').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
         }
 
         function actualizarKpisMoldes(data) {
@@ -960,9 +998,7 @@
             } catch (err) { alert('Error al actualizar molde.'); }
         }
 
-        /* -------------------------------------------------------------
-           2. SOLAPA CALIDAD & DESMOLDE
-        ------------------------------------------------------------- */
+        /* 2. CALIDAD & DESMOLDE (RECUPERADO CON PROCESAMIENTO Y POP-UP DRILL-DOWN) */
         async function cargarCalidadData() {
             try {
                 const [resApp, resDesmolde] = await Promise.all([
@@ -989,26 +1025,6 @@
             } catch (e) {
                 console.error("Error al cargar Calidad:", e);
                 document.getElementById('container-calidad-desmolde').innerHTML = '<p style="color: var(--danger);">Error al conectar con Supabase.</p>';
-            }
-        }
-
-        function toggleVistaCalidad() {
-            const vista = document.getElementById('filtro-calidad-vista').value;
-            const containerDesmolde = document.getElementById('container-calidad-desmolde');
-            const containerIncidencias = document.getElementById('calidad-list');
-            const kpisIncidencias = document.getElementById('kpis-calidad-incidencias');
-            const groupFiltro = document.getElementById('group-filtro-desmolde');
-
-            if (vista === 'REPORTE_DESMOLDE') {
-                containerDesmolde.style.display = 'grid';
-                containerIncidencias.style.display = 'none';
-                kpisIncidencias.style.display = 'none';
-                groupFiltro.style.display = 'flex';
-            } else {
-                containerDesmolde.style.display = 'none';
-                containerIncidencias.style.display = 'grid';
-                kpisIncidencias.style.display = 'grid';
-                groupFiltro.style.display = 'none';
             }
         }
 
@@ -1126,7 +1142,7 @@
         }
 
         function verDetalleDesmolde(nMolde, modelo) {
-            const m = cacheDesmoldeProcesado.find(item => item.n_molde === nMolde && item.modelo === modelo);
+            const m = cacheDesmoldeProcesado.find(item => item.n_molde.toString() === nMolde.toString() && item.modelo === modelo);
             if (!m) return;
 
             document.getElementById('modal-desmolde-titulo').innerText = `Molde N° ${m.n_molde} - ${m.modelo}`;
@@ -1145,13 +1161,13 @@
                         <li>Armadura Expuesta: <strong>${m.conteo_defectos.armadura_expuesta}</strong></li>
                     </ul>
                 </div>
-                <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial de Desmoldes e Inspecciones:</h4>
+                <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial Cronológico de Piezas Inspeccionadas:</h4>
                 <div style="max-height: 250px; overflow-y: auto;">
                     ${m.registros.map(r => `
                         <div style="border-bottom: 1px solid var(--border-color); padding: 8px 0; font-size: 0.85rem;">
                             <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
                                 <span>📅 ${new Date(r.fecha).toLocaleString('es-AR')}</span>
-                                <code>${r.id_unico_match}</code>
+                                <code>${r.id_unico_match || 'Sin Match ID'}</code>
                             </div>
                             <p style="margin: 4px 0;"><strong>Observaciones:</strong> ${r.Observaciones || 'Sin observaciones adicionales.'}</p>
                             ${r.caja_descuadrada_cual ? `<p style="margin: 2px 0; color: var(--warning);"><small>Caja Descuadrada: ${r.caja_descuadrada_cual}</small></p>` : ''}
@@ -1283,16 +1299,13 @@
             document.getElementById('modal-detalle').style.display = 'flex';
         }
 
-        /* -------------------------------------------------------------
-           3. SOLAPA MANTENIMIENTO & MEJORAS
-        ------------------------------------------------------------- */
+        /* 3. MANTENIMIENTO */
         async function cargarProcesosData() {
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*&order=fecha_creacion.desc`, {
                     headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
                 cacheMantenimiento = await res.json();
-
                 if (!Array.isArray(cacheMantenimiento)) cacheMantenimiento = [];
 
                 const abiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
@@ -1304,9 +1317,7 @@
                 document.getElementById('kpi-mant-cerradas').innerText = cerradas;
 
                 renderizarMantenimiento(cacheMantenimiento);
-            } catch (e) {
-                console.error("Error al cargar Mantenimiento:", e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         function filtrarMantenimientoKpi(estado) {
@@ -1416,6 +1427,7 @@
             document.getElementById('modal-detalle').style.display = 'none';
         }
 
+        /* 4. LOGÍSTICA */
         async function cargarLogisticaData() {
             const container = document.getElementById('logistica-list');
             try {
@@ -1439,24 +1451,17 @@
             } catch (e) { console.error(e); }
         }
 
-        /* -------------------------------------------------------------
-           5. SOLAPA BIENESTAR ORGANIZACIONAL
-        ------------------------------------------------------------- */
+        /* 5. BIENESTAR ORGANIZACIONAL */
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
             container.innerHTML = '<p style="color: var(--text-muted);">Cargando nómina y auditorías desde Supabase...</p>';
 
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, {
-                    headers: { 
-                        'apikey': SUPABASE_ANON_KEY, 
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}` 
-                    }
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
                 });
 
-                if (!res.ok) {
-                    throw new Error(`Status ${res.status}: ${res.statusText}`);
-                }
+                if (!res.ok) throw new Error(`Status ${res.status}: ${res.statusText}`);
 
                 cacheRankingBienestar = await res.json();
 
@@ -1616,9 +1621,7 @@
             }
         }
 
-        /* -------------------------------------------------------------
-           6. SOLAPA INDICADORES EN TIEMPO REAL & MODAL DRILL-DOWN DE ORIGEN
-        ------------------------------------------------------------- */
+        /* 6. INDICADORES Y MODAL DE ORIGEN */
         async function cargarIndicadoresData() {
             try {
                 if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0) {
@@ -1637,29 +1640,23 @@
                     cacheDemandaOdoo = await resDem.json();
                 }
 
-                // 1. Disponibilidad Moldes (%)
                 const totalMoldes = cacheEficienciaMoldes.length || 1;
                 const moldesEnProduccion = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'ARMANDO' || m.estado_flujo === 'POR LLENAR' || m.estado_flujo === 'FINALIZADO').length;
                 const disponibilidadPct = ((moldesEnProduccion / totalMoldes) * 100).toFixed(1);
                 document.getElementById('kpi-ind-disponibilidad').innerText = `${disponibilidadPct}%`;
 
-                // 2. Alertas Críticas RFID
                 const alertasCriticas = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
                 document.getElementById('kpi-ind-alertas-rfid').innerText = alertasCriticas;
 
-                // 3. Backlog Pendiente Odoo
                 const totalPiezasPendientes = cacheDemandaOdoo.reduce((acc, curr) => acc + (parseInt(curr.cant_pendiente) || 0), 0);
                 document.getElementById('kpi-ind-backlog').innerText = `${totalPiezasPendientes} pzas`;
 
-                // 4. Moldes Llenados Hoy
                 const llenadosHoy = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO').length;
                 document.getElementById('kpi-ind-llenados').innerText = llenadosHoy;
 
-                // 5. Calidad: Casos Abiertos
                 const calAbiertas = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
                 document.getElementById('kpi-ind-cal-abiertos').innerText = calAbiertas;
 
-                // 6. MTTR Calidad (Horas Promedio)
                 const casosCerradosCalidad = cacheCalidad.filter(c => (c.estado === 'Resuelto' || c.estado === 'Cerrado') && c.fecha_reporte && c.fecha_resolucion);
                 let sumaHorasCal = 0;
                 casosCerradosCalidad.forEach(c => {
@@ -1669,27 +1666,21 @@
                 const mttrCalidad = casosCerradosCalidad.length > 0 ? (sumaHorasCal / casosCerradosCalidad.length).toFixed(1) : "0.0";
                 document.getElementById('kpi-ind-mttr-calidad').innerText = `${mttrCalidad}h`;
 
-                // 7. Mantenimiento Pendiente
                 const mantAbiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
                 document.getElementById('kpi-ind-mant-abiertas').innerText = mantAbiertas;
 
-                // 8. Operarios Auditados
                 const opsAuditados = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0).length;
                 document.getElementById('kpi-ind-ops-auditados').innerText = `${opsAuditados} / ${cacheRankingBienestar.length}`;
 
-                // 9. Salud Org. (Teal Index)
                 const opsConAud = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0);
                 const sumaTeal = opsConAud.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
                 const tealIndex = opsConAud.length > 0 ? (sumaTeal / opsConAud.length).toFixed(1) : "0.0";
                 document.getElementById('kpi-ind-salud-teal').innerText = `${tealIndex}%`;
 
-                // 10. Despachos Pendientes (Órdenes SO)
                 const despachosPendientes = cacheDemandaOdoo.filter(d => (parseInt(d.cant_pendiente) || 0) > 0).length;
                 document.getElementById('kpi-ind-despachos').innerText = `${despachosPendientes} SO`;
 
-            } catch (err) {
-                console.error("Error al consolidar Indicadores Realtime:", err);
-            }
+            } catch (err) { console.error("Error al consolidar Indicadores Realtime:", err); }
         }
 
         function mostrarOrigenKpi(tipo) {
