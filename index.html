@@ -589,7 +589,7 @@
         </div>
     </div>
 
-    <!-- MODAL POP-UP DRILL-DOWN DETALLE DE DESMOLDE CON TRAZABILIDAD (RECUPERADO) -->
+    <!-- MODAL POP-UP DRILL-DOWN DETALLE DE DESMOLDE CON TRAZABILIDAD -->
     <div id="modal-desmolde" class="modal-overlay" style="display: none;">
         <div class="modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -666,7 +666,6 @@
         const WEBHOOK_N8N_PDF = "https://n8n.celotti.com.ar/webhook/generar-reporte-bienestar";
 
         let cacheCalidad = [];
-        let cacheRegistroDesmolde = [];
         let cacheDesmoldeProcesado = [];
         let cacheMantenimiento = [];
         let cacheEficienciaMoldes = [];
@@ -998,19 +997,19 @@
             } catch (err) { alert('Error al actualizar molde.'); }
         }
 
-        /* 2. CALIDAD & DESMOLDE (RECUPERADO CON PROCESAMIENTO Y POP-UP DRILL-DOWN) */
+        /* 2. CALIDAD & DESMOLDE (CONEXIÓN OPTIMIZADA A VISTA POSTGRESQL + LAZY DRILL-DOWN) */
         async function cargarCalidadData() {
             try {
-                const [resApp, resDesmolde] = await Promise.all([
+                const [resApp, resVistaDesmolde] = await Promise.all([
                     fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?select=*&order=fecha.desc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                    fetch(`${SUPABASE_URL}/rest/v1/vista_ranking_defectos_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
                 ]);
 
                 cacheCalidad = await resApp.json();
-                cacheRegistroDesmolde = await resDesmolde.json();
+                cacheDesmoldeProcesado = await resVistaDesmolde.json();
 
                 if (!Array.isArray(cacheCalidad)) cacheCalidad = [];
-                if (!Array.isArray(cacheRegistroDesmolde)) cacheRegistroDesmolde = [];
+                if (!Array.isArray(cacheDesmoldeProcesado)) cacheDesmoldeProcesado = [];
 
                 const abiertos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
                 const enProceso = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso).length;
@@ -1020,164 +1019,116 @@
                 document.getElementById('kpi-cal-proceso').innerText = enProceso;
                 document.getElementById('kpi-cal-resueltos').innerText = resueltos;
 
-                procesarYRenderizarDesmolde(cacheRegistroDesmolde);
+                renderizarTarjetasDesmolde(cacheDesmoldeProcesado);
                 renderizarCalidad(cacheCalidad);
             } catch (e) {
                 console.error("Error al cargar Calidad:", e);
-                document.getElementById('container-calidad-desmolde').innerHTML = '<p style="color: var(--danger);">Error al conectar con Supabase.</p>';
+                document.getElementById('container-calidad-desmolde').innerHTML = '<p style="color: var(--danger);">Error al consultar la vista de desmolde en Supabase.</p>';
             }
-        }
-
-        function procesarYRenderizarDesmolde(data) {
-            const mapaMoldes = {};
-
-            data.forEach(item => {
-                const key = `${item.n_molde}_${item.modelo}`;
-                if (!mapaMoldes[key]) {
-                    mapaMoldes[key] = {
-                        n_molde: item.n_molde,
-                        modelo: item.modelo,
-                        total_piezas_inspeccionadas: 0,
-                        total_defectos_acumulados: 0,
-                        conteo_defectos: {
-                            pilar_cajas_danadas: 0,
-                            cajas_descuadradas: 0,
-                            logo_defectuoso: 0,
-                            fisuras: 0,
-                            armadura_expuesta: 0,
-                            mal_llenado_poros: 0,
-                            rebabas: 0
-                        },
-                        registros: []
-                    };
-                }
-
-                const m = mapaMoldes[key];
-                m.total_piezas_inspeccionadas += 1;
-
-                if ((item.pilar_cajas_sanas || '').trim().toUpperCase() === 'NO') {
-                    m.conteo_defectos.pilar_cajas_danadas += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if (!(item.cajas_en_escuadra || '').includes('SI')) {
-                    m.conteo_defectos.cajas_descuadradas += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if ((item.logo_prolijo_escuadrado || '').trim().toUpperCase() === 'NO') {
-                    m.conteo_defectos.logo_defectuoso += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if ((item.libre_de_fisuras || '').trim().toUpperCase() === 'NO') {
-                    m.conteo_defectos.fisuras += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if ((item.armadura_expuesta || '').trim().toUpperCase() === 'SI') {
-                    m.conteo_defectos.armadura_expuesta += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if ((item.mal_llenado_poros || '').trim().toUpperCase() === 'SI') {
-                    m.conteo_defectos.mal_llenado_poros += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-                if ((item.presenta_rebabas || '').trim().toUpperCase() === 'SI') {
-                    m.conteo_defectos.rebabas += 1;
-                    m.total_defectos_acumulados += 1;
-                }
-
-                m.registros.push(item);
-            });
-
-            cacheDesmoldeProcesado = Object.values(mapaMoldes).sort((a, b) => b.total_defectos_acumulados - a.total_defectos_acumulados);
-
-            renderizarTarjetasDesmolde(cacheDesmoldeProcesado);
         }
 
         function renderizarTarjetasDesmolde(lista) {
             const container = document.getElementById('container-calidad-desmolde');
 
             if (!Array.isArray(lista) || lista.length === 0) {
-                container.innerHTML = '<p>No hay registros de desmolde cargados.</p>';
+                container.innerHTML = '<p style="color: var(--text-muted);">No hay registros de desmolde cargados.</p>';
                 return;
             }
 
             container.innerHTML = lista.map(m => {
+                const totalDefectos = parseInt(m.total_defectos_acumulados) || 0;
                 let badgeClass = 'badge-success';
                 let borderColor = 'var(--accent-teal)';
 
-                if (m.total_defectos_acumulados >= 4) {
+                if (totalDefectos >= 4) {
                     badgeClass = 'badge-danger';
                     borderColor = 'var(--danger)';
-                } else if (m.total_defectos_acumulados > 0) {
+                } else if (totalDefectos > 0) {
                     badgeClass = 'badge-warning';
                     borderColor = 'var(--warning)';
                 }
 
+                const modeloLimpio = (m.modelo || 'Sin Familia').trim();
+
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleDesmolde('${m.n_molde}', '${m.modelo}')">
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleDesmolde('${m.n_molde}', '${modeloLimpio}')">
                         <div>
                             <div class="card-header">
                                 <span>Molde N° ${m.n_molde}</span>
-                                <span class="badge ${badgeClass}">${m.total_defectos_acumulados} Defectos</span>
+                                <span class="badge ${badgeClass}">${totalDefectos} Defectos</span>
                             </div>
-                            <p style="font-size:1.05rem; font-weight:700; margin: 4px 0;">Familia / Modelo: ${m.modelo}</p>
-                            <p><small>📊 Piezas Inspeccionadas: <strong>${m.total_piezas_inspeccionadas}</strong></small></p>
+                            <p style="font-size:1.05rem; font-weight:700; margin: 4px 0;">Familia / Modelo: ${modeloLimpio}</p>
+                            <p><small>📊 Piezas Inspeccionadas: <strong>${m.total_piezas_inspeccionadas || 0}</strong></small></p>
 
                             <div style="margin: 10px 0;">
-                                ${m.conteo_defectos.mal_llenado_poros > 0 ? `<span class="defect-tag">Poros/Llenado (${m.conteo_defectos.mal_llenado_poros})</span>` : ''}
-                                ${m.conteo_defectos.rebabas > 0 ? `<span class="defect-tag">Rebabas (${m.conteo_defectos.rebabas})</span>` : ''}
-                                ${m.conteo_defectos.fisuras > 0 ? `<span class="defect-tag">Fisuras (${m.conteo_defectos.fisuras})</span>` : ''}
-                                ${m.conteo_defectos.cajas_descuadradas > 0 ? `<span class="defect-tag">Descuadrado (${m.conteo_defectos.cajas_descuadradas})</span>` : ''}
-                                ${m.conteo_defectos.pilar_cajas_danadas > 0 ? `<span class="defect-tag">Cajas Dañadas (${m.conteo_defectos.pilar_cajas_danadas})</span>` : ''}
-                                ${m.conteo_defectos.logo_defectuoso > 0 ? `<span class="defect-tag">Logo Defect. (${m.conteo_defectos.logo_defectuoso})</span>` : ''}
-                                ${m.conteo_defectos.armadura_expuesta > 0 ? `<span class="defect-tag">Armadura Exp. (${m.conteo_defectos.armadura_expuesta})</span>` : ''}
-                                ${m.total_defectos_acumulados === 0 ? `<span class="badge badge-success">Sin Defectos Registrados</span>` : ''}
+                                ${parseInt(m.mal_llenado_poros) > 0 ? `<span class="defect-tag">Poros/Llenado (${m.mal_llenado_poros})</span>` : ''}
+                                ${parseInt(m.rebabas) > 0 ? `<span class="defect-tag">Rebabas (${m.rebabas})</span>` : ''}
+                                ${parseInt(m.fisuras) > 0 ? `<span class="defect-tag">Fisuras (${m.fisuras})</span>` : ''}
+                                ${parseInt(m.cajas_descuadradas) > 0 ? `<span class="defect-tag">Descuadrado (${m.cajas_descuadradas})</span>` : ''}
+                                ${parseInt(m.pilar_cajas_danadas) > 0 ? `<span class="defect-tag">Cajas Dañadas (${m.pilar_cajas_danadas})</span>` : ''}
+                                ${parseInt(m.logo_defectuoso) > 0 ? `<span class="defect-tag">Logo Defect. (${m.logo_defectuoso})</span>` : ''}
+                                ${parseInt(m.armadura_expuesta) > 0 ? `<span class="defect-tag">Armadura Exp. (${m.armadura_expuesta})</span>` : ''}
+                                ${totalDefectos === 0 ? `<span class="badge badge-success">Sin Defectos Registrados</span>` : ''}
                             </div>
                         </div>
                         <div style="margin-top: 12px; text-align: right; border-top: 1px solid var(--border-color); padding-top: 8px;">
-                            <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Ficha Técnica ➔</span>
+                            <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Historial por Pieza ➔</span>
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        function verDetalleDesmolde(nMolde, modelo) {
-            const m = cacheDesmoldeProcesado.find(item => item.n_molde.toString() === nMolde.toString() && item.modelo === modelo);
+        async function verDetalleDesmolde(nMolde, modelo) {
+            const modeloBuscado = (modelo || '').trim();
+            const m = cacheDesmoldeProcesado.find(item => 
+                item.n_molde.toString() === nMolde.toString() && 
+                (item.modelo || '').trim() === modeloBuscado
+            );
             if (!m) return;
 
-            document.getElementById('modal-desmolde-titulo').innerText = `Molde N° ${m.n_molde} - ${m.modelo}`;
-            document.getElementById('modal-desmolde-badge').innerText = `${m.total_defectos_acumulados} Defectos Totales`;
-
-            const htmlDefectos = `
-                <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
-                    <h4 style="margin-top:0; color: var(--accent-teal);">Resumen Agregado de Desvíos:</h4>
-                    <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem;">
-                        <li>Poros o Mal Llenado: <strong>${m.conteo_defectos.mal_llenado_poros}</strong></li>
-                        <li>Presencia de Rebabas: <strong>${m.conteo_defectos.rebabas}</strong></li>
-                        <li>Fisuras / Rajaduras: <strong>${m.conteo_defectos.fisuras}</strong></li>
-                        <li>Cajas Descuadradas: <strong>${m.conteo_defectos.cajas_descuadradas}</strong></li>
-                        <li>Cajas / Pilar Dañados: <strong>${m.conteo_defectos.pilar_cajas_danadas}</strong></li>
-                        <li>Logo Defectuoso: <strong>${m.conteo_defectos.logo_defectuoso}</strong></li>
-                        <li>Armadura Expuesta: <strong>${m.conteo_defectos.armadura_expuesta}</strong></li>
-                    </ul>
-                </div>
-                <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial Cronológico de Piezas Inspeccionadas:</h4>
-                <div style="max-height: 250px; overflow-y: auto;">
-                    ${m.registros.map(r => `
-                        <div style="border-bottom: 1px solid var(--border-color); padding: 8px 0; font-size: 0.85rem;">
-                            <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
-                                <span>📅 ${new Date(r.fecha).toLocaleString('es-AR')}</span>
-                                <code>${r.id_unico_match || 'Sin Match ID'}</code>
-                            </div>
-                            <p style="margin: 4px 0;"><strong>Observaciones:</strong> ${r.Observaciones || 'Sin observaciones adicionales.'}</p>
-                            ${r.caja_descuadrada_cual ? `<p style="margin: 2px 0; color: var(--warning);"><small>Caja Descuadrada: ${r.caja_descuadrada_cual}</small></p>` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-
-            document.getElementById('modal-desmolde-body').innerHTML = htmlDefectos;
+            document.getElementById('modal-desmolde-titulo').innerText = `Molde N° ${m.n_molde} - ${modeloBuscado}`;
+            document.getElementById('modal-desmolde-badge').innerText = `${m.total_defectos_acumulados || 0} Defectos Totales`;
+            document.getElementById('modal-desmolde-body').innerHTML = '<p style="color: var(--text-muted);">Cargando trazabilidad por pieza...</p>';
             document.getElementById('modal-desmolde').style.display = 'flex';
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?n_molde=eq.${m.n_molde}&modelo=eq.${encodeURIComponent(modeloBuscado)}&order=fecha.desc`, {
+                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                });
+                const registrosPiezas = await res.json();
+
+                const htmlDefectos = `
+                    <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
+                        <h4 style="margin-top:0; color: var(--accent-teal);">Resumen Acumulado de Desvíos:</h4>
+                        <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem;">
+                            <li>Poros / Mal Llenado: <strong>${m.mal_llenado_poros || 0}</strong></li>
+                            <li>Rebabas: <strong>${m.rebabas || 0}</strong></li>
+                            <li>Fisuras / Rajaduras: <strong>${m.fisuras || 0}</strong></li>
+                            <li>Cajas Descuadradas: <strong>${m.cajas_descuadradas || 0}</strong></li>
+                            <li>Cajas / Pilar Dañados: <strong>${m.pilar_cajas_danadas || 0}</strong></li>
+                            <li>Logo Defectuoso: <strong>${m.logo_defectuoso || 0}</strong></li>
+                            <li>Armadura Expuesta: <strong>${m.armadura_expuesta || 0}</strong></li>
+                        </ul>
+                    </div>
+                    <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial Cronológico (id_unico_match):</h4>
+                    <div style="max-height: 250px; overflow-y: auto;">
+                        ${registrosPiezas.map(r => `
+                            <div style="border-bottom: 1px solid var(--border-color); padding: 8px 0; font-size: 0.85rem;">
+                                <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
+                                    <span>📅 ${new Date(r.fecha).toLocaleString('es-AR')}</span>
+                                    <code>${r.id_unico_match || 'Sin Match ID'}</code>
+                                </div>
+                                <p style="margin: 4px 0;"><strong>Observaciones:</strong> ${r.Observaciones || 'Sin observaciones registradas.'}</p>
+                                ${r.caja_descuadrada_cual ? `<p style="margin: 2px 0; color: var(--warning);"><small>Caja Descuadrada: ${r.caja_descuadrada_cual}</small></p>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                document.getElementById('modal-desmolde-body').innerHTML = htmlDefectos;
+            } catch (err) {
+                document.getElementById('modal-desmolde-body').innerHTML = '<p style="color: var(--danger);">Error al recuperar el historial desde Supabase.</p>';
+            }
         }
 
         function cerrarModalDesmolde() {
