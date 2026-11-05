@@ -167,10 +167,6 @@
             transform: translateY(-2px);
             border-color: var(--accent-teal) !important;
         }
-        .kpi-card.active-filter {
-            background-color: #1a2332;
-            box-shadow: 0 0 10px var(--border-color);
-        }
         .kpi-title {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -224,9 +220,6 @@
         .badge-warning { background: var(--warning); color: #000000; }
         .badge-success { background: var(--accent-teal); color: #0f172a; }
         .badge-info { background: var(--blue-info); color: #ffffff; }
-        .badge-gold { background: var(--gold); color: #000000; font-weight: 800; }
-        .badge-silver { background: var(--silver); color: #000000; font-weight: 800; }
-        .badge-bronze { background: var(--bronze); color: #ffffff; font-weight: 800; }
 
         .btn {
             background-color: var(--accent-teal);
@@ -238,31 +231,8 @@
             cursor: pointer;
             transition: opacity 0.2s;
         }
-        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-secondary { background-color: var(--border-color); color: var(--text-main); }
         .btn:hover { opacity: 0.9; }
-
-        .card-img-container {
-            width: 100%;
-            height: 160px;
-            border-radius: 6px;
-            overflow: hidden;
-            margin: 10px 0;
-            background-color: var(--bg-dark);
-            border: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .card-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .no-img-placeholder {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-style: italic;
-        }
 
         .modal-overlay {
             position: fixed;
@@ -279,20 +249,11 @@
             border: 1px solid var(--accent-teal);
             border-radius: 12px;
             width: 90%;
-            max-width: 680px;
+            max-width: 750px;
             padding: 24px;
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
             max-height: 85vh;
             overflow-y: auto;
-        }
-        .img-preview-modal {
-            width: 100%;
-            max-height: 320px;
-            object-fit: contain;
-            border-radius: 8px;
-            margin-top: 12px;
-            background-color: var(--bg-dark);
-            border: 1px solid var(--border-color);
         }
 
         .table-teal {
@@ -315,40 +276,21 @@
             background-color: rgba(255, 255, 255, 0.02);
         }
 
-        .timeline {
-            position: relative;
-            margin: 16px 0;
-            padding-left: 20px;
-            border-left: 2px solid var(--border-color);
+        .breadcrumb {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 16px;
         }
-        .timeline-item {
-            position: relative;
-            margin-bottom: 12px;
+        .breadcrumb-item {
+            cursor: pointer;
+            color: var(--accent-teal);
+            font-weight: 600;
         }
-        .timeline-item::before {
-            content: '';
-            position: absolute;
-            left: -26px;
-            top: 4px;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--text-muted);
-        }
-        .timeline-item.active::before {
-            background: var(--accent-teal);
-            box-shadow: 0 0 8px var(--accent-teal);
-        }
-
-        .defect-tag {
-            display: inline-block;
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid var(--danger);
-            color: #fca5a5;
-            font-size: 0.75rem;
-            padding: 3px 8px;
-            border-radius: 4px;
-            margin: 2px;
+        .breadcrumb-item:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -356,7 +298,7 @@
 
     <div class="sidebar">
         <div class="brand">🏭 CELOTTI OS</div>
-        <div class="nav-item active" onclick="switchTab('planificacion')">📦 Planificación</div>
+        <div class="nav-item active" id="nav-planificacion" onclick="switchTab('planificacion')">📦 Planificación</div>
         
         <!-- CALIDAD DESPLEGABLE -->
         <div class="nav-item" id="nav-parent-calidad" onclick="toggleSubmenuCalidad()">
@@ -364,14 +306,17 @@
             <span id="arrow-calidad" style="margin-left: auto; font-size: 0.7rem;">▼</span>
         </div>
         <div class="sub-menu" id="submenu-calidad">
-            <div class="nav-sub-item active" id="sub-moldes-criticos" onclick="switchCalidadSubTab('REPORTE_DESMOLDE')">🧱 Moldes Críticos (Ranking)</div>
+            <div class="nav-sub-item" id="sub-moldes-criticos" onclick="switchCalidadSubTab('REPORTE_DESMOLDE')">🧱 Moldes Críticos (Ranking)</div>
             <div class="nav-sub-item" id="sub-incidencias" onclick="switchCalidadSubTab('INCIDENCIAS')">⚠️ Incidencias Abiertas (App)</div>
         </div>
 
-        <div class="nav-item" onclick="switchTab('mantenimiento')">⚙️ Mantenimiento</div>
-        <div class="nav-item" onclick="switchTab('logistica')">🚛 Logística & Despacho</div>
-        <div class="nav-item" onclick="switchTab('bienestar')">🌱 Bienestar Org.</div>
-        <div class="nav-item" onclick="switchTab('indicadores')">📊 Indicadores Teal</div>
+        <!-- NUEVA SOLAPA PROCESOS & TIEMPOS -->
+        <div class="nav-item" id="nav-procesos-tiempos" onclick="switchTab('procesos-tiempos')">⚡ Procesos & Tiempos</div>
+
+        <div class="nav-item" id="nav-mantenimiento" onclick="switchTab('mantenimiento')">⚙️ Mantenimiento</div>
+        <div class="nav-item" id="nav-logistica" onclick="switchTab('logistica')">🚛 Logística & Despacho</div>
+        <div class="nav-item" id="nav-bienestar" onclick="switchTab('bienestar')">🌱 Bienestar Org.</div>
+        <div class="nav-item" id="nav-indicadores" onclick="switchTab('indicadores')">📊 Indicadores Teal</div>
     </div>
 
     <div class="main-content">
@@ -380,340 +325,73 @@
             <div>Planta: <strong>Río Ceballos</strong></div>
         </div>
 
-        <!-- 1. SOLAPA PLANIFICACIÓN -->
+        <!-- 1. PLANIFICACIÓN -->
         <div id="sec-planificacion">
             <div class="filter-bar">
                 <div class="filter-group">
                     <label>Buscar Molde o Producto:</label>
-                    <input type="text" id="filtro-plan-texto" placeholder="Ej: Pilar, N° 8, Molde 2..." oninput="filtrarPlanificacion()">
-                </div>
-                <div class="filter-group">
-                    <label>Ver Vista:</label>
-                    <select id="filtro-plan-vista" onchange="toggleVistaPlanificacion()">
-                        <option value="MONITOREO_REALTIME">⏱️ Ciclo de Moldes RFID (Tiempo Real)</option>
-                        <option value="DEMANDA">Demanda Pendiente Odoo</option>
-                        <option value="MOLDES">Matriz de Moldes Activos</option>
-                    </select>
-                </div>
-                <div class="filter-group" id="group-filtro-equipo">
-                    <label>Equipo:</label>
-                    <select id="filtro-plan-equipo" onchange="filtrarPlanificacion()">
-                        <option value="TODOS">Todos los equipos</option>
-                        <option value="Amarillo">Amarillo</option>
-                        <option value="Azul">Azul</option>
-                        <option value="Rojo">Rojo</option>
-                        <option value="Verde">Verde</option>
-                    </select>
+                    <input type="text" id="filtro-plan-texto" placeholder="Ej: Pilar, N° 8..." oninput="filtrarPlanificacion()">
                 </div>
             </div>
-
-            <div class="kpi-container" id="kpis-plan-moldes">
-                <div class="kpi-card kpi-card-interactive" id="kpi-card-finalizados" style="border-top: 3px solid var(--accent-teal);" onclick="seleccionarFiltroKpi('FINALIZADO')">
-                    <div class="kpi-title">Moldes Finalizados</div>
-                    <div class="kpi-value" id="kpi-moldes-finalizados" style="color: var(--accent-teal);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-card-porllenar" style="border-top: 3px solid var(--blue-info);" onclick="seleccionarFiltroKpi('POR LLENAR')">
-                    <div class="kpi-title">Por Llenar</div>
-                    <div class="kpi-value" id="kpi-moldes-porllenar" style="color: var(--blue-info);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-card-armando" style="border-top: 3px solid var(--warning);" onclick="seleccionarFiltroKpi('ARMANDO')">
-                    <div class="kpi-title">Armando en Marcha</div>
-                    <div class="kpi-value" id="kpi-moldes-armando" style="color: var(--warning);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-card-criticos" style="border-top: 3px solid var(--danger);" onclick="seleccionarFiltroKpi('CRITICO')">
-                    <div class="kpi-title">Alertas Críticas</div>
-                    <div class="kpi-value" id="kpi-moldes-criticos" style="color: var(--danger);">0</div>
-                </div>
-            </div>
-
-            <div id="container-plan-realtime" class="grid-cards">Cargando monitoreo de moldes RFID...</div>
-            <div id="container-plan-demanda" class="grid-cards" style="display:none;">Cargando órdenes de producción...</div>
-            <div id="container-plan-moldes" class="grid-cards" style="display:none;">Cargando matriz de moldes...</div>
+            <div id="container-plan-realtime" class="grid-cards">Cargando monitoreo...</div>
         </div>
 
-        <!-- 2. SOLAPA CALIDAD & DESMOLDE -->
-        <div id="sec-calidad" style="display: none;">
-            <div class="filter-bar">
-                <div class="filter-group" id="group-filtro-desmolde">
-                    <label>Buscar por N° Molde o Modelo:</label>
-                    <input type="text" id="filtro-desmolde-texto" placeholder="Ej: 31, Paviuso, Multiuso..." oninput="filtrarReporteDesmolde()">
-                </div>
+        <!-- 2. SOLAPA PROCESOS & TIEMPOS (NUEVO MÓDULO JERÁRQUICO) -->
+        <div id="sec-procesos-tiempos" style="display: none;">
+            <!-- BREADCRUMB DE NAVEGACIÓN TEAL -->
+            <div class="breadcrumb" id="proc-breadcrumb">
+                <span class="breadcrumb-item" onclick="navegarProcesos('EQUIPOS')">🏭 Planta General</span>
             </div>
 
-            <!-- KPIs DE INCIDENCIAS -->
-            <div class="kpi-container" id="kpis-calidad-incidencias" style="display: none;">
-                <div class="kpi-card kpi-card-interactive" id="kpi-cal-card-abierto" style="border-top: 3px solid var(--danger);" onclick="filtrarCalidadKpi('Abierto')">
-                    <div class="kpi-title">Abiertos (Sin Tomar)</div>
-                    <div class="kpi-value" id="kpi-cal-abiertos" style="color: var(--danger);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-cal-card-proceso" style="border-top: 3px solid var(--warning);" onclick="filtrarCalidadKpi('En Proceso')">
-                    <div class="kpi-title">En Proceso</div>
-                    <div class="kpi-value" id="kpi-cal-proceso" style="color: var(--warning);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-cal-card-resuelto" style="border-top: 3px solid var(--accent-teal);" onclick="filtrarCalidadKpi('Resuelto')">
-                    <div class="kpi-title">Resueltos / Cerrados</div>
-                    <div class="kpi-value" id="kpi-cal-resueltos" style="color: var(--accent-teal);">0</div>
-                </div>
-            </div>
+            <!-- VISTA NIVEL 1: EQUIPOS -->
+            <div id="view-proc-equipos" class="grid-cards">Cargando tiempos por equipo...</div>
 
-            <!-- VISTA 1: RANKING DESMOLDE Y MOLDES CRÍTICOS -->
-            <div id="container-calidad-desmolde" class="grid-cards">Cargando reporte de desmolde por molde...</div>
+            <!-- VISTA NIVEL 2: FAMILIAS -->
+            <div id="view-proc-familias" class="grid-cards" style="display: none;"></div>
 
-            <!-- VISTA 2: INCIDENCIAS ABIERTAS APP -->
-            <div id="calidad-list" class="grid-cards" style="display: none;">Cargando registros de calidad...</div>
+            <!-- VISTA NIVEL 3: MOLDES DETALLADOS -->
+            <div id="view-proc-moldes" style="display: none;"></div>
         </div>
 
-        <!-- 3. SOLAPA MANTENIMIENTO -->
+        <!-- 3. MANTENIMIENTO -->
         <div id="sec-mantenimiento" style="display: none;">
-            <div class="kpi-container">
-                <div class="kpi-card kpi-card-interactive" id="kpi-mant-card-abierta" style="border-top: 3px solid var(--danger);" onclick="filtrarMantenimientoKpi('Abierta')">
-                    <div class="kpi-title">Pendientes</div>
-                    <div class="kpi-value" id="kpi-mant-abiertas" style="color: var(--danger);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-mant-card-tomada" style="border-top: 3px solid var(--warning);" onclick="filtrarMantenimientoKpi('Tomada')">
-                    <div class="kpi-title">En Curso</div>
-                    <div class="kpi-value" id="kpi-mant-tomadas" style="color: var(--warning);">0</div>
-                </div>
-                <div class="kpi-card kpi-card-interactive" id="kpi-mant-card-cerrada" style="border-top: 3px solid var(--accent-teal);" onclick="filtrarMantenimientoKpi('Finalizada')">
-                    <div class="kpi-title">Finalizadas</div>
-                    <div class="kpi-value" id="kpi-mant-cerradas" style="color: var(--accent-teal);">0</div>
-                </div>
-            </div>
             <div id="mantenimiento-list" class="grid-cards">Cargando órdenes de mantenimiento...</div>
         </div>
 
-        <!-- 4. SOLAPA LOGÍSTICA -->
+        <!-- 4. LOGÍSTICA -->
         <div id="sec-logistica" style="display: none;">
-            <div id="logistica-list" class="grid-cards">Cargando pendientes de despacho...</div>
+            <div id="logistica-list" class="grid-cards">Cargando pendientes...</div>
         </div>
 
-        <!-- 5. SOLAPA BIENESTAR ORGANIZACIONAL -->
+        <!-- 5. BIENESTAR -->
         <div id="sec-bienestar" style="display: none;">
-            <div class="kpi-container">
-                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
-                    <div class="kpi-title">Promedio General</div>
-                    <div class="kpi-value" id="kpi-bie-promedio" style="color: var(--accent-teal);">0.0%</div>
-                </div>
-                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
-                    <div class="kpi-title">Operarios Cobertura</div>
-                    <div class="kpi-value" id="kpi-bie-auditados" style="color: var(--blue-info);">0 / 0</div>
-                </div>
-                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
-                    <div class="kpi-title">Requieren Apoyo Teal</div>
-                    <div class="kpi-value" id="kpi-bie-apoyo" style="color: var(--warning);">0</div>
-                </div>
-            </div>
-
-            <div class="filter-bar">
-                <div class="filter-group">
-                    <label>Buscar Operario:</label>
-                    <input type="text" id="filtro-bie-nombre" placeholder="Nombre del operario..." oninput="filtrarRankingBienestar()">
-                </div>
-                <div class="filter-group">
-                    <label>Nivel de Desempeño:</label>
-                    <select id="filtro-bie-nivel" onchange="filtrarRankingBienestar()">
-                        <option value="TODOS">Todos los niveles</option>
-                        <option value="EXCELENTE">Excelente (>= 90%)</option>
-                        <option value="CONSOLIDACION">Consolidación (70% - 89%)</option>
-                        <option value="REQUIERE_APOYO">Requiere Apoyo (< 70%)</option>
-                        <option value="SIN_AUDITORIA">Sin Auditorías</option>
-                    </select>
-                </div>
-            </div>
-
-            <h3 style="color: var(--accent-teal); margin-bottom: 14px;">🏆 Ranking y Cobertura de Personal</h3>
             <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
-        <!-- 6. SOLAPA INDICADORES REALTIME -->
+        <!-- 6. INDICADORES -->
         <div id="sec-indicadores" style="display: none;">
-            <div class="kpi-container" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('disponibilidad')">
-                    <div class="kpi-title">1. Disponibilidad Moldes</div>
-                    <div class="kpi-value" id="kpi-ind-disponibilidad" style="color: var(--accent-teal);">0%</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--danger);" onclick="mostrarOrigenKpi('alertas-rfid')">
-                    <div class="kpi-title">2. Alertas RFID Críticas</div>
-                    <div class="kpi-value" id="kpi-ind-alertas-rfid" style="color: var(--danger);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--warning);" onclick="mostrarOrigenKpi('backlog')">
-                    <div class="kpi-title">3. Backlog Pendiente Odoo</div>
-                    <div class="kpi-value" id="kpi-ind-backlog" style="color: var(--warning);">0 pzas</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('llenados')">
-                    <div class="kpi-title">4. Moldes Llenados Hoy</div>
-                    <div class="kpi-value" id="kpi-ind-llenados" style="color: var(--accent-teal);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--danger);" onclick="mostrarOrigenKpi('cal-abiertos')">
-                    <div class="kpi-title">5. Calidad: Casos Abiertos</div>
-                    <div class="kpi-value" id="kpi-ind-cal-abiertos" style="color: var(--danger);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--blue-info);" onclick="mostrarOrigenKpi('mttr-calidad')">
-                    <div class="kpi-title">6. MTTR Calidad (Promedio)</div>
-                    <div class="kpi-value" id="kpi-ind-mttr-calidad" style="color: var(--blue-info);">0h</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--warning);" onclick="mostrarOrigenKpi('mant-abiertas')">
-                    <div class="kpi-title">7. Mantenimiento Pendiente</div>
-                    <div class="kpi-value" id="kpi-ind-mant-abiertas" style="color: var(--warning);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--blue-info);" onclick="mostrarOrigenKpi('ops-auditados')">
-                    <div class="kpi-title">8. Operarios Auditados</div>
-                    <div class="kpi-value" id="kpi-ind-ops-auditados" style="color: var(--blue-info);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('salud-teal')">
-                    <div class="kpi-title">9. Salud Org. (Teal Index)</div>
-                    <div class="kpi-value" id="kpi-ind-salud-teal" style="color: var(--accent-teal);">0.0%</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--gold);" onclick="mostrarOrigenKpi('despachos')">
-                    <div class="kpi-title">10. Despachos Pendientes</div>
-                    <div class="kpi-value" id="kpi-ind-despachos" style="color: var(--gold);">0 SO</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-            </div>
-
-            <div class="card" style="margin-top: 20px;">
-                <h3 style="margin-top:0; color: var(--accent-teal);">📊 Visión Holística Operativa Celotti SRL</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">
-                    Monitoreo en vivo alimentado por la arquitectura de Webhooks de n8n, lecturas RFID en puestos de desmolde/llenado y PostgreSQL en Supabase.
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL POP-UP DRILL-DOWN DETALLE DE DESMOLDE CON TRAZABILIDAD -->
-    <div id="modal-desmolde" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 id="modal-desmolde-titulo" style="margin: 0; color: var(--accent-teal);">Detalle del Molde</h3>
-                <span class="badge" id="modal-desmolde-badge">CRITICIDAD</span>
-            </div>
-            <div id="modal-desmolde-body"></div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn" onclick="cerrarModalDesmolde()">Cerrar Ficha</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL ORIGEN DE DATOS KPI -->
-    <div id="modal-kpi-origen" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 id="modal-kpi-titulo" style="margin: 0; color: var(--accent-teal);">Origen del KPI</h3>
-                <span class="badge badge-info" id="modal-kpi-fuente">Fuente</span>
-            </div>
-            <div id="modal-kpi-body"></div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn" onclick="cerrarModalKpiOrigen()">Cerrar Origen</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DETALLE GENÉRICO -->
-    <div id="modal-detalle" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 id="modal-det-titulo" style="margin: 0; color: var(--accent-teal);">Detalle del Caso</h3>
-                <span class="badge" id="modal-det-badge">ESTADO</span>
-            </div>
-            <div id="modal-det-body"></div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn" onclick="cerrarModalDetalle()">Cerrar Ficha</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL TRAZA MOLDE RFID -->
-    <div id="modal-molde" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 id="modal-molde-titulo" style="margin: 0; color: var(--accent-teal);">Molde #</h3>
-                <span class="badge" id="modal-molde-estado">ESTADO</span>
-            </div>
-            <div id="modal-molde-body"></div>
-            <div style="margin-top: 20px; text-align: right;">
-                <button class="btn" onclick="cerrarModalMolde()">Cerrar Traza</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL OPERARIO BIENESTAR -->
-    <div id="modal-operario" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 id="modal-op-nombre" style="margin: 0; color: var(--accent-teal);">Operario</h3>
-                <span class="badge" id="modal-op-posicion">#0</span>
-            </div>
-            <div id="modal-op-body"></div>
-            <div style="margin-top: 20px; text-align: right; display: flex; justify-content: flex-end; gap: 8px;">
-                <button class="btn" style="background-color: var(--blue-info); color: white;" id="btn-gen-pdf">📄 Generar PDF (n8n)</button>
-                <button class="btn" onclick="cerrarModalOperario()">Cerrar</button>
-            </div>
+            <div class="card"><h3 style="color: var(--accent-teal);">📊 Visión Holística Operativa</h3></div>
         </div>
     </div>
 
     <script>
         const SUPABASE_URL = "https://vpomzjwmmfudgiahrqlk.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4";
-        const WEBHOOK_N8N_PDF = "https://n8n.celotti.com.ar/webhook/generar-reporte-bienestar";
 
-        let cacheCalidad = [];
-        let cacheDesmoldeProcesado = [];
-        let cacheMantenimiento = [];
         let cacheEficienciaMoldes = [];
-        let cacheDemandaOdoo = [];
+        let cacheHistoricoDesvios = [];
         let cacheMoldesPlanificacion = [];
-        let cacheRankingBienestar = [];
 
-        let filtroEstadoKpiActivo = null;
-        let filtroCalidadKpiActivo = null;
-        let filtroMantKpiActivo = null;
-
-        function toggleSubmenuCalidad() {
-            const submenu = document.getElementById('submenu-calidad');
-            const arrow = document.getElementById('arrow-calidad');
-            const isVisible = submenu.style.display === 'flex';
-            
-            submenu.style.display = isVisible ? 'none' : 'flex';
-            arrow.innerText = isVisible ? '▼' : '▲';
-            switchTab('calidad');
-        }
-
-        function switchCalidadSubTab(vista) {
-            document.querySelectorAll('.nav-sub-item').forEach(e => e.classList.remove('active'));
-            const containerDesmolde = document.getElementById('container-calidad-desmolde');
-            const containerIncidencias = document.getElementById('calidad-list');
-            const kpisIncidencias = document.getElementById('kpis-calidad-incidencias');
-            const groupFiltro = document.getElementById('group-filtro-desmolde');
-
-            if (vista === 'REPORTE_DESMOLDE') {
-                document.getElementById('sub-moldes-criticos').classList.add('active');
-                document.getElementById('tab-title').innerText = 'Calidad: Reporte de Desmolde por Molde';
-                containerDesmolde.style.display = 'grid';
-                containerIncidencias.style.display = 'none';
-                kpisIncidencias.style.display = 'none';
-                groupFiltro.style.display = 'flex';
-            } else {
-                document.getElementById('sub-incidencias').classList.add('active');
-                document.getElementById('tab-title').innerText = 'Calidad: Incidencias Abiertas App';
-                containerDesmolde.style.display = 'none';
-                containerIncidencias.style.display = 'grid';
-                kpisIncidencias.style.display = 'grid';
-                groupFiltro.style.display = 'none';
-            }
-        }
+        // Estado de la navegación en Procesos & Tiempos
+        let navProcesosEstado = {
+            nivel: 'EQUIPOS', // EQUIPOS -> FAMILIAS -> MOLDES
+            equipoSeleccionado: null,
+            familiaSeleccionada: null
+        };
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
-            ['planificacion', 'calidad', 'mantenimiento', 'logistica', 'bienestar', 'indicadores'].forEach(t => {
+            ['planificacion', 'calidad', 'procesos-tiempos', 'mantenimiento', 'logistica', 'bienestar', 'indicadores'].forEach(t => {
                 const el = document.getElementById(`sec-${t}`);
                 if (el) el.style.display = 'none';
             });
@@ -721,1101 +399,203 @@
             const secActiva = document.getElementById(`sec-${tab}`);
             if (secActiva) secActiva.style.display = 'block';
 
-            if(tab === 'planificacion') {
-                document.getElementById('tab-title').innerText = 'Planificación y Demanda PCP';
-                cargarPlanificacionData();
-            } else if(tab === 'calidad') {
-                document.getElementById('tab-title').innerText = 'Calidad y Reporte de Desmolde por Molde';
-                cargarCalidadData();
-            } else if(tab === 'mantenimiento') {
-                document.getElementById('tab-title').innerText = 'Gestión de Procesos y Mantenimiento';
-                cargarProcesosData();
-            } else if(tab === 'logistica') {
-                document.getElementById('tab-title').innerText = 'Logística y Expedición';
-                cargarLogisticaData();
-            } else if(tab === 'bienestar') {
-                document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
-                cargarBienestarData();
-            } else if(tab === 'indicadores') {
-                document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Realtime Teal';
-                cargarIndicadoresData();
+            const navItem = document.getElementById(`nav-${tab}`);
+            if (navItem) navItem.classList.add('active');
+
+            if (tab === 'procesos-tiempos') {
+                document.getElementById('tab-title').innerText = 'Procesos: Análisis de Tiempos Teóricos vs. Reales';
+                cargarProcesosYTiemposData();
             }
         }
 
-        function calcularTiempoResolucion(fechaInicio, fechaFin) {
-            if (!fechaInicio) return "N/A";
-            const inicio = new Date(fechaInicio);
-            const fin = fechaFin ? new Date(fechaFin) : new Date();
-
-            const diffMs = fin - inicio;
-            if (diffMs < 0) return "0 min";
-
-            const diffMins = Math.floor(diffMs / (1000 * 60));
-            const horas = Math.floor(diffMins / 60);
-            const mins = diffMins % 60;
-            const dias = Math.floor(horas / 24);
-            const horasRestantes = horas % 24;
-
-            if (dias > 0) return `${dias}d ${horasRestantes}h ${mins}m`;
-            if (horas > 0) return `${horas}h ${mins}m`;
-            return `${mins} min`;
-        }
-
-        /* 1. PLANIFICACIÓN */
-        async function cargarPlanificacionData() {
+        /* ---------------------------------------------------- */
+        /* MÓDULO PROCESOS & TIEMPOS (DESVÍOS HISTÓRICOS Y TEÓRICOS) */
+        /* ---------------------------------------------------- */
+        async function cargarProcesosYTiemposData() {
             try {
-                const [resEficiencia, resDemanda, resMoldes] = await Promise.all([
-                    fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*&order=n_molde.asc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                const [resEf, resDesvios, resMoldes] = await Promise.all([
+                    fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
+                    fetch(`${SUPABASE_URL}/rest/v1/ranking_historico_desvios_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
+                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
                 ]);
 
-                cacheEficienciaMoldes = await resEficiencia.json();
-                cacheDemandaOdoo = await resDemanda.json();
+                cacheEficienciaMoldes = await resEf.json();
+                cacheHistoricoDesvios = await resDesvios.json();
                 cacheMoldesPlanificacion = await resMoldes.json();
 
-                actualizarKpisMoldes(cacheEficienciaMoldes);
-                filtrarPlanificacion();
-                renderizarDemandaOdoo(cacheDemandaOdoo);
-                renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
-            } catch (e) { 
-                console.error("Error al cargar datos de planificación", e);
+                if (!Array.isArray(cacheHistoricoDesvios)) cacheHistoricoDesvios = [];
+                if (!Array.isArray(cacheEficienciaMoldes)) cacheEficienciaMoldes = [];
+
+                renderizarNivelEquipos();
+            } catch (err) {
+                console.error("Error cargando vistas de procesos y tiempos:", err);
             }
         }
 
-        function toggleVistaPlanificacion() {
-            const vista = document.getElementById('filtro-plan-vista').value;
-            document.getElementById('container-plan-realtime').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
-            document.getElementById('container-plan-demanda').style.display = vista === 'DEMANDA' ? 'grid' : 'none';
-            document.getElementById('container-plan-moldes').style.display = vista === 'MOLDES' ? 'grid' : 'none';
-            document.getElementById('kpis-plan-moldes').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
-        }
+        function navegarProcesos(nivel, equipo = null, familia = null) {
+            navProcesosEstado.nivel = nivel;
+            if (equipo) navProcesosEstado.equipoSeleccionado = equipo;
+            if (familia) navProcesosEstado.familiaSeleccionada = familia;
 
-        function actualizarKpisMoldes(data) {
-            if (!Array.isArray(data)) return;
-            document.getElementById('kpi-moldes-finalizados').innerText = data.filter(m => m.estado_flujo === 'FINALIZADO').length;
-            document.getElementById('kpi-moldes-porllenar').innerText = data.filter(m => m.estado_flujo === 'POR LLENAR').length;
-            document.getElementById('kpi-moldes-armando').innerText = data.filter(m => m.estado_flujo === 'ARMANDO').length;
-            document.getElementById('kpi-moldes-criticos').innerText = data.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
-        }
-
-        function seleccionarFiltroKpi(estado) {
-            document.querySelectorAll('#kpis-plan-moldes .kpi-card-interactive').forEach(card => card.classList.remove('active-filter'));
-
-            if (filtroEstadoKpiActivo === estado) {
-                filtroEstadoKpiActivo = null;
-            } else {
-                filtroEstadoKpiActivo = estado;
-                if (estado === 'FINALIZADO') document.getElementById('kpi-card-finalizados').classList.add('active-filter');
-                else if (estado === 'POR LLENAR') document.getElementById('kpi-card-porllenar').classList.add('active-filter');
-                else if (estado === 'ARMANDO') document.getElementById('kpi-card-armando').classList.add('active-filter');
-                else if (estado === 'CRITICO') document.getElementById('kpi-card-criticos').classList.add('active-filter');
+            // Actualizar Breadcrumb
+            const breadcrumbEl = document.getElementById('proc-breadcrumb');
+            let htmlBc = `<span class="breadcrumb-item" onclick="navegarProcesos('EQUIPOS')">🏭 Planta General</span>`;
+            
+            if (nivel === 'FAMILIAS' || nivel === 'MOLDES') {
+                htmlBc += ` ➔ <span class="breadcrumb-item" onclick="navegarProcesos('FAMILIAS', '${navProcesosEstado.equipoSeleccionado}')">Equipo ${navProcesosEstado.equipoSeleccionado}</span>`;
             }
-
-            filtrarPlanificacion();
-        }
-
-        function renderizarRealtimeMoldes(data) {
-            const container = document.getElementById('container-plan-realtime');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No se encontraron moldes para la selección aplicada.</p>';
-                return;
+            if (nivel === 'MOLDES') {
+                htmlBc += ` ➔ <span style="color: var(--text-main); font-weight: 700;">Familia: ${navProcesosEstado.familiaSeleccionada}</span>`;
             }
+            breadcrumbEl.innerHTML = htmlBc;
 
-            container.innerHTML = data.map(item => {
-                let badgeEstado = `<span class="badge badge-info">SIN INICIAR</span>`;
-                let borderColor = 'var(--border-color)';
+            // Ocultar todas las vistas
+            document.getElementById('view-proc-equipos').style.display = 'none';
+            document.getElementById('view-proc-familias').style.display = 'none';
+            document.getElementById('view-proc-moldes').style.display = 'none';
 
-                if (item.estado_flujo === 'FINALIZADO') {
-                    badgeEstado = `<span class="badge badge-success">FINALIZADO</span>`;
-                    borderColor = 'var(--accent-teal)';
-                } else if (item.estado_flujo === 'POR LLENAR') {
-                    badgeEstado = `<span class="badge badge-info">POR LLENAR</span>`;
-                    borderColor = 'var(--blue-info)';
-                } else if (item.estado_flujo === 'ARMANDO') {
-                    badgeEstado = `<span class="badge badge-warning">ARMANDO</span>`;
-                    borderColor = 'var(--warning)';
-                }
-
-                let badgeAlerta = `<span class="badge">${item.alerta_productividad}</span>`;
-                if (item.alerta_productividad === '🚨 CRITICO') badgeAlerta = `<span class="badge badge-danger">🚨 CRÍTICO</span>`;
-                else if (item.alerta_productividad === '⚠️ CON DESVIO') badgeAlerta = `<span class="badge badge-warning">⚠️ CON DESVÍO</span>`;
-                else if (item.alerta_productividad === '✅ EN TIEMPO') badgeAlerta = `<span class="badge badge-success">✅ EN TIEMPO</span>`;
-
-                const horaDes = item.hora_desarmado ? item.hora_desarmado.substring(11, 16) : '--:--';
-                const horaArm = item.hora_armado ? item.hora_armado.substring(11, 16) : '--:--';
-                const horaLle = item.hora_llenado ? item.hora_llenado.substring(11, 16) : '--:--';
-
-                return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verTrazaMolde(${item.n_molde}, '${item.producto}')">
-                        <div class="card-header">
-                            <span>Molde #${item.n_molde}</span>
-                            ${badgeEstado}
-                        </div>
-                        <p style="font-size: 0.9rem; font-weight: 600; margin: 4px 0;">${item.producto}</p>
-                        <p><small>👥 <strong>Equipo:</strong> ${item.equipo_planificacion || 'Sin Asignar'}</small></p>
-                        <p><small>⏱️ <strong>Obj:</strong> ${item.tiempo_objetivo_min} min | <strong>Real:</strong> ${item.tiempo_real_min ? item.tiempo_real_min + ' min' : 'En proceso'}</small></p>
-                        <div style="font-size: 0.8rem; background: var(--bg-dark); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
-                            <span>🔓 Des: <strong>${horaDes}</strong></span>
-                            <span>🔒 Arm: <strong>${horaArm}</strong></span>
-                            <span>🧱 Lle: <strong>${horaLle}</strong></span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                            ${badgeAlerta}
-                            <small style="color: var(--text-muted);">Ver Traza ➔</small>
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            if (nivel === 'EQUIPOS') renderizarNivelEquipos();
+            else if (nivel === 'FAMILIAS') renderizarNivelFamilias(navProcesosEstado.equipoSeleccionado);
+            else if (nivel === 'MOLDES') renderizarNivelMoldes(navProcesosEstado.equipoSeleccionado, navProcesosEstado.familiaSeleccionada);
         }
 
-        function verTrazaMolde(nMolde, producto) {
-            const m = cacheEficienciaMoldes.find(item => item.n_molde === nMolde && item.producto === producto);
-            if (!m) return;
+        // NIVEL 1: VISTA DE EQUIPOS
+        function renderizarNivelEquipos() {
+            const container = document.getElementById('view-proc-equipos');
+            container.style.display = 'grid';
 
-            document.getElementById('modal-molde-titulo').innerText = `Molde #${m.n_molde} - ${m.producto}`;
-            document.getElementById('modal-molde-estado').innerText = m.estado_flujo;
+            const equipos = ['Amarillo', 'Azul', 'Rojo', 'Verde'];
 
-            const formatHora = (str) => str ? new Date(str).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Pendiente';
-
-            document.getElementById('modal-molde-body').innerHTML = `
-                <p><strong>Equipo Planificado:</strong> ${m.equipo_planificacion}</p>
-                <p><strong>Tiempo Objetivo Armado:</strong> ${m.tiempo_objetivo_min} minutos</p>
-                <p><strong>Tiempo Real Medido:</strong> ${m.tiempo_real_min ? m.tiempo_real_min + ' minutos' : 'En ejecución'}</p>
-                <p><strong>Estado Productividad:</strong> ${m.alerta_productividad}</p>
-                <hr style="border-color: var(--border-color); margin: 12px 0;">
-                <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Cronología de Registros RFID:</h4>
-                <div class="timeline">
-                    <div class="timeline-item ${m.hora_desarmado ? 'active' : ''}">
-                        <strong>1. Puesto Desarmado:</strong> ${formatHora(m.hora_desarmado)}
-                    </div>
-                    <div class="timeline-item ${m.hora_armado ? 'active' : ''}">
-                        <strong>2. Puesto Armado:</strong> ${formatHora(m.hora_armado)}
-                    </div>
-                    <div class="timeline-item ${m.hora_llenado ? 'active' : ''}">
-                        <strong>3. Puesto Llenado:</strong> ${formatHora(m.hora_llenado)}
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('modal-molde').style.display = 'flex';
-        }
-
-        function cerrarModalMolde() {
-            document.getElementById('modal-molde').style.display = 'none';
-        }
-
-        function filtrarPlanificacion() {
-            const texto = document.getElementById('filtro-plan-texto').value.toLowerCase();
-            const equipo = document.getElementById('filtro-plan-equipo').value;
-
-            const moldesFiltrados = cacheEficienciaMoldes.filter(m => {
-                const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || m.n_molde.toString().includes(texto);
-                const coincideEquipo = (equipo === 'TODOS') || (m.equipo_planificacion === equipo);
+            container.innerHTML = equipos.map(eq => {
+                // Obtener moldes asociados a este equipo
+                const moldesEquipo = cacheEficienciaMoldes.filter(m => m.equipo_planificacion === eq);
+                const nMoldes = moldesEquipo.map(m => m.n_molde);
                 
-                let coincideKpi = true;
-                if (filtroEstadoKpiActivo === 'CRITICO') {
-                    coincideKpi = (m.alerta_productividad === '🚨 CRITICO');
-                } else if (filtroEstadoKpiActivo) {
-                    coincideKpi = (m.estado_flujo === filtroEstadoKpiActivo);
-                }
+                // Filtrar desvíos históricos de este equipo
+                const desviosEq = cacheHistoricoDesvios.filter(d => nMoldes.includes(d.n_molde));
+                
+                const totalCiclos = desviosEq.reduce((acc, curr) => acc + parseInt(curr.total_ciclos_medidos || 0), 0);
+                const desvioPromedio = desviosEq.length > 0 
+                    ? (desviosEq.reduce((acc, curr) => acc + parseFloat(curr.desvio_promedio_min || 0), 0) / desviosEq.length).toFixed(1)
+                    : "0.0";
 
-                return coincideTexto && coincideEquipo && coincideKpi;
-            });
-            renderizarRealtimeMoldes(moldesFiltrados);
+                const pctIncumplimiento = desviosEq.length > 0
+                    ? (desviosEq.reduce((acc, curr) => acc + parseFloat(curr.porcentaje_incumplimiento || 0), 0) / desviosEq.length).toFixed(1)
+                    : "0.0";
 
-            const demandaFiltrada = cacheDemandaOdoo.filter(d => 
-                (d.producto || '').toLowerCase().includes(texto) || 
-                (d.pedido_so || '').toLowerCase().includes(texto) ||
-                (d.cliente || '').toLowerCase().includes(texto)
-            );
-            renderizarDemandaOdoo(demandaFiltrada);
+                let border = 'var(--accent-teal)';
+                if (parseFloat(pctIncumplimiento) > 35) border = 'var(--danger)';
+                else if (parseFloat(pctIncumplimiento) > 15) border = 'var(--warning)';
 
-            const matrizFiltrada = cacheMoldesPlanificacion.filter(m =>
-                (m.nombre_simplificado || '').toLowerCase().includes(texto) ||
-                (m.Familia || '').toLowerCase().includes(texto)
-            );
-            renderizarMoldesPlanificacion(matrizFiltrada);
-        }
-
-        function renderizarDemandaOdoo(data) {
-            const container = document.getElementById('container-plan-demanda');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No hay órdenes de trabajo pendientes cargadas.</p>';
-                return;
-            }
-
-            container.innerHTML = data.map(item => `
-                <div class="card" style="border-left: 4px solid var(--warning);">
-                    <div class="card-header">
-                        <span>SO: ${item.pedido_so || 'Sin Pedido'}</span>
-                        <span class="badge badge-warning">${item.cant_pendiente || 0} pend.</span>
-                    </div>
-                    <p><strong>Producto:</strong> ${item.producto || 'N/A'}</p>
-                    <p><small>👤 <strong>Cliente:</strong> ${item.cliente || 'Consumidor Final'}</small></p>
-                    <p><small>🛠️ <strong>MO:</strong> ${item.orden_fabricacion_mo || 'N/A'}</small></p>
-                </div>
-            `).join('');
-        }
-
-        function renderizarMoldesPlanificacion(data) {
-            const container = document.getElementById('container-plan-moldes');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No hay moldes registrados.</p>';
-                return;
-            }
-
-            container.innerHTML = data.map(molde => {
-                const estaActivo = (molde.Estado || '').toUpperCase() === 'SI';
                 return `
-                    <div class="card" style="border-left: 4px solid ${estaActivo ? 'var(--accent-teal)' : 'var(--danger)'};">
+                    <div class="card card-interactive" style="border-left: 4px solid ${border};" onclick="navegarProcesos('FAMILIAS', '${eq}')">
                         <div class="card-header">
-                            <span>${molde.nombre_simplificado || 'Sin Nombre'}</span>
-                            <span class="badge ${estaActivo ? 'badge-success' : 'badge-danger'}">${molde.Estado || 'NO'}</span>
+                            <span>Equipo ${eq}</span>
+                            <span class="badge ${parseFloat(pctIncumplimiento) > 25 ? 'badge-danger' : 'badge-success'}">${pctIncumplimiento}% Desvío</span>
                         </div>
-                        <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag}</small></p>
-                        <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'}</small></p>
+                        <p>📋 Moldes Asignados: <strong>${moldesEquipo.length} moldes</strong></p>
+                        <p>⏱️ Desvío Promedio: <strong>+${desvioPromedio} min</strong></p>
+                        <p><small>📊 Total Ciclos Medidos RFID: ${totalCiclos}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
-                            <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${molde.id_tag}', '${molde.Estado}')">
-                                ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
-                            </button>
+                            <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Familias de Productos ➔</span>
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        async function toggleEstadoMolde(idTag, estadoActual) {
-            const nuevoEstado = (estadoActual || '').toUpperCase() === 'SI' ? 'NO' : 'SI';
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?id_tag=eq.${encodeURIComponent(idTag)}`, {
-                    method: 'PATCH',
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-                    body: JSON.stringify({ "Estado": nuevoEstado })
-                });
-                if (res.ok) cargarPlanificacionData();
-            } catch (err) { alert('Error al actualizar molde.'); }
-        }
+        // NIVEL 2: VISTA DE FAMILIAS
+        function renderizarNivelFamilias(equipo) {
+            const container = document.getElementById('view-proc-familias');
+            container.style.display = 'grid';
 
-        /* 2. CALIDAD & DESMOLDE (CONEXIÓN OPTIMIZADA A VISTA POSTGRESQL + LAZY DRILL-DOWN) */
-        async function cargarCalidadData() {
-            try {
-                const [resApp, resVistaDesmolde] = await Promise.all([
-                    fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/vista_ranking_defectos_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
-                ]);
-
-                cacheCalidad = await resApp.json();
-                cacheDesmoldeProcesado = await resVistaDesmolde.json();
-
-                if (!Array.isArray(cacheCalidad)) cacheCalidad = [];
-                if (!Array.isArray(cacheDesmoldeProcesado)) cacheDesmoldeProcesado = [];
-
-                const abiertos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
-                const enProceso = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso).length;
-                const resueltos = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado').length;
-
-                document.getElementById('kpi-cal-abiertos').innerText = abiertos;
-                document.getElementById('kpi-cal-proceso').innerText = enProceso;
-                document.getElementById('kpi-cal-resueltos').innerText = resueltos;
-
-                renderizarTarjetasDesmolde(cacheDesmoldeProcesado);
-                renderizarCalidad(cacheCalidad);
-            } catch (e) {
-                console.error("Error al cargar Calidad:", e);
-                document.getElementById('container-calidad-desmolde').innerHTML = '<p style="color: var(--danger);">Error al consultar la vista de desmolde en Supabase.</p>';
-            }
-        }
-
-        function renderizarTarjetasDesmolde(lista) {
-            const container = document.getElementById('container-calidad-desmolde');
-
-            if (!Array.isArray(lista) || lista.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted);">No hay registros de desmolde cargados.</p>';
-                return;
-            }
-
-            container.innerHTML = lista.map(m => {
-                const totalDefectos = parseInt(m.total_defectos_acumulados) || 0;
-                let badgeClass = 'badge-success';
-                let borderColor = 'var(--accent-teal)';
-
-                if (totalDefectos >= 4) {
-                    badgeClass = 'badge-danger';
-                    borderColor = 'var(--danger)';
-                } else if (totalDefectos > 0) {
-                    badgeClass = 'badge-warning';
-                    borderColor = 'var(--warning)';
-                }
-
-                const modeloLimpio = (m.modelo || 'Sin Familia').trim();
-
-                return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleDesmolde('${m.n_molde}', '${modeloLimpio}')">
-                        <div>
-                            <div class="card-header">
-                                <span>Molde N° ${m.n_molde}</span>
-                                <span class="badge ${badgeClass}">${totalDefectos} Defectos</span>
-                            </div>
-                            <p style="font-size:1.05rem; font-weight:700; margin: 4px 0;">Familia / Modelo: ${modeloLimpio}</p>
-                            <p><small>📊 Piezas Inspeccionadas: <strong>${m.total_piezas_inspeccionadas || 0}</strong></small></p>
-
-                            <div style="margin: 10px 0;">
-                                ${parseInt(m.mal_llenado_poros) > 0 ? `<span class="defect-tag">Poros/Llenado (${m.mal_llenado_poros})</span>` : ''}
-                                ${parseInt(m.rebabas) > 0 ? `<span class="defect-tag">Rebabas (${m.rebabas})</span>` : ''}
-                                ${parseInt(m.fisuras) > 0 ? `<span class="defect-tag">Fisuras (${m.fisuras})</span>` : ''}
-                                ${parseInt(m.cajas_descuadradas) > 0 ? `<span class="defect-tag">Descuadrado (${m.cajas_descuadradas})</span>` : ''}
-                                ${parseInt(m.pilar_cajas_danadas) > 0 ? `<span class="defect-tag">Cajas Dañadas (${m.pilar_cajas_danadas})</span>` : ''}
-                                ${parseInt(m.logo_defectuoso) > 0 ? `<span class="defect-tag">Logo Defect. (${m.logo_defectuoso})</span>` : ''}
-                                ${parseInt(m.armadura_expuesta) > 0 ? `<span class="defect-tag">Armadura Exp. (${m.armadura_expuesta})</span>` : ''}
-                                ${totalDefectos === 0 ? `<span class="badge badge-success">Sin Defectos Registrados</span>` : ''}
-                            </div>
-                        </div>
-                        <div style="margin-top: 12px; text-align: right; border-top: 1px solid var(--border-color); padding-top: 8px;">
-                            <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Historial por Pieza ➔</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function verDetalleDesmolde(nMolde, modelo) {
-            const modeloBuscado = (modelo || '').trim();
-            const m = cacheDesmoldeProcesado.find(item => 
-                item.n_molde.toString() === nMolde.toString() && 
-                (item.modelo || '').trim() === modeloBuscado
-            );
-            if (!m) return;
-
-            document.getElementById('modal-desmolde-titulo').innerText = `Molde N° ${m.n_molde} - ${modeloBuscado}`;
-            document.getElementById('modal-desmolde-badge').innerText = `${m.total_defectos_acumulados || 0} Defectos Totales`;
-            document.getElementById('modal-desmolde-body').innerHTML = '<p style="color: var(--text-muted);">Cargando trazabilidad por pieza...</p>';
-            document.getElementById('modal-desmolde').style.display = 'flex';
-
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?n_molde=eq.${m.n_molde}&modelo=eq.${encodeURIComponent(modeloBuscado)}&order=fecha.desc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-                });
-                const registrosPiezas = await res.json();
-
-                const htmlDefectos = `
-                    <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
-                        <h4 style="margin-top:0; color: var(--accent-teal);">Resumen Acumulado de Desvíos:</h4>
-                        <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem;">
-                            <li>Poros / Mal Llenado: <strong>${m.mal_llenado_poros || 0}</strong></li>
-                            <li>Rebabas: <strong>${m.rebabas || 0}</strong></li>
-                            <li>Fisuras / Rajaduras: <strong>${m.fisuras || 0}</strong></li>
-                            <li>Cajas Descuadradas: <strong>${m.cajas_descuadradas || 0}</strong></li>
-                            <li>Cajas / Pilar Dañados: <strong>${m.pilar_cajas_danadas || 0}</strong></li>
-                            <li>Logo Defectuoso: <strong>${m.logo_defectuoso || 0}</strong></li>
-                            <li>Armadura Expuesta: <strong>${m.armadura_expuesta || 0}</strong></li>
-                        </ul>
-                    </div>
-                    <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial Cronológico (id_unico_match):</h4>
-                    <div style="max-height: 250px; overflow-y: auto;">
-                        ${registrosPiezas.map(r => `
-                            <div style="border-bottom: 1px solid var(--border-color); padding: 8px 0; font-size: 0.85rem;">
-                                <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
-                                    <span>📅 ${new Date(r.fecha).toLocaleString('es-AR')}</span>
-                                    <code>${r.id_unico_match || 'Sin Match ID'}</code>
-                                </div>
-                                <p style="margin: 4px 0;"><strong>Observaciones:</strong> ${r.Observaciones || 'Sin observaciones registradas.'}</p>
-                                ${r.caja_descuadrada_cual ? `<p style="margin: 2px 0; color: var(--warning);"><small>Caja Descuadrada: ${r.caja_descuadrada_cual}</small></p>` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                document.getElementById('modal-desmolde-body').innerHTML = htmlDefectos;
-            } catch (err) {
-                document.getElementById('modal-desmolde-body').innerHTML = '<p style="color: var(--danger);">Error al recuperar el historial desde Supabase.</p>';
-            }
-        }
-
-        function cerrarModalDesmolde() {
-            document.getElementById('modal-desmolde').style.display = 'none';
-        }
-
-        function filtrarReporteDesmolde() {
-            const texto = document.getElementById('filtro-desmolde-texto').value.toLowerCase();
-            const filtrados = cacheDesmoldeProcesado.filter(m =>
-                m.n_molde.toString().toLowerCase().includes(texto) ||
-                (m.modelo || '').toLowerCase().includes(texto)
-            );
-            renderizarTarjetasDesmolde(filtrados);
-        }
-
-        function filtrarCalidadKpi(estado) {
-            document.querySelectorAll('#sec-calidad .kpi-card-interactive').forEach(card => card.classList.remove('active-filter'));
+            const moldesEquipo = cacheEficienciaMoldes.filter(m => m.equipo_planificacion === equipo);
             
-            if (filtroCalidadKpiActivo === estado) {
-                filtroCalidadKpiActivo = null;
-            } else {
-                filtroCalidadKpiActivo = estado;
-                if (estado === 'Abierto') document.getElementById('kpi-cal-card-abierto').classList.add('active-filter');
-                else if (estado === 'En Proceso') document.getElementById('kpi-cal-card-proceso').classList.add('active-filter');
-                else if (estado === 'Resuelto') document.getElementById('kpi-cal-card-resuelto').classList.add('active-filter');
-            }
-
-            let filtrados = cacheCalidad;
-            if (filtroCalidadKpiActivo === 'Abierto') {
-                filtrados = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso);
-            } else if (filtroCalidadKpiActivo === 'En Proceso') {
-                filtrados = cacheCalidad.filter(c => c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso);
-            } else if (filtroCalidadKpiActivo === 'Resuelto') {
-                filtrados = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado');
-            }
-
-            renderizarCalidad(filtrados);
-        }
-
-        function renderizarCalidad(data) {
-            const container = document.getElementById('calidad-list');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No se encontraron registros de calidad.</p>';
-                return;
-            }
-
-            container.innerHTML = data.map(item => {
-                let estadoVisual = item.estado || 'Abierto';
-                let badgeClass = 'badge-danger';
-                let borderColor = 'var(--danger)';
-
-                if (item.estado === 'Resuelto' || item.estado === 'Cerrado') {
-                    badgeClass = 'badge-success';
-                    borderColor = 'var(--accent-teal)';
-                    estadoVisual = 'Resuelto';
-                } else if (item.fecha_toma_caso) {
-                    estadoVisual = 'En Proceso';
-                    badgeClass = 'badge-warning';
-                    borderColor = 'var(--warning)';
-                }
-
-                const duracion = calcularTiempoResolucion(item.fecha_reporte, item.fecha_resolucion);
-
-                const imagenHtml = item.archivo_url 
-                    ? `<div class="card-img-container"><img src="${item.archivo_url}" class="card-img" alt="Foto Incidencia Calidad" loading="lazy"></div>`
-                    : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin evidencia fotográfica</span></div>`;
-
-                return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleCalidad('${item.id}')">
-                        <div>
-                            <div class="card-header">
-                                <span>Incidencia Calidad</span>
-                                <span class="badge ${badgeClass}">${estadoVisual}</span>
-                            </div>
-                            ${imagenHtml}
-                            <p style="font-weight:600; margin: 6px 0; font-size: 0.95rem;">${item.descripcion_problema}</p>
-                            <p style="margin: 2px 0;"><small>👤 <strong>Auditor:</strong> ${item.auditor || 'Calidad Celotti'}</small></p>
-                            <p style="margin: 2px 0;"><small>🛠️ <strong>Responsable:</strong> ${item.responsable_calidad || 'Sin Asignar'}</small></p>
-                        </div>
-                        <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border-color); padding-top: 8px;">
-                            <span>⏱️ <strong>${duracion}</strong></span>
-                            <span style="color: var(--accent-teal); font-weight: 600;">Ver Ficha ➔</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function verDetalleCalidad(id) {
-            const c = cacheCalidad.find(item => item.id === id);
-            if (!c) return;
-
-            let estadoVisual = c.estado || 'Abierto';
-            if (c.estado !== 'Resuelto' && c.estado !== 'Cerrado' && c.fecha_toma_caso) estadoVisual = 'En Proceso';
-
-            document.getElementById('modal-det-titulo').innerText = `Incidencia Calidad`;
-            document.getElementById('modal-det-badge').innerText = estadoVisual;
-
-            const tiempoResolucion = calcularTiempoResolucion(c.fecha_reporte, c.fecha_resolucion);
-            const fechaToma = c.fecha_toma_caso ? new Date(c.fecha_toma_caso).toLocaleString('es-AR') : 'Sin tomar por el responsable';
-            const fechaCierre = c.fecha_resolucion ? new Date(c.fecha_resolucion).toLocaleString('es-AR') : 'Caso Abierto / En proceso';
-
-            document.getElementById('modal-det-body').innerHTML = `
-                <p><strong>ID Incidencia:</strong> <code>${c.id}</code></p>
-                <p><strong>Descripción del Problema:</strong> ${c.descripcion_problema}</p>
-                <p><strong>Origen del Reporte:</strong> ${c.origen_reporte || 'Calidad'}</p>
-                <p><strong>Auditor:</strong> ${c.auditor}</p>
-                <p><strong>Operario en Puesto:</strong> ${c.operario || 'N/A'}</p>
-                <p><strong>Responsable Asignado:</strong> ${c.responsable_calidad || 'Sin Asignar'}</p>
-                <p><strong>Tiempo de Resolución / Transcurrido:</strong> <span style="color: var(--accent-teal); font-weight:700;">${tiempoResolucion}</span></p>
-                <hr style="border-color: var(--border-color); margin: 12px 0;">
-                <p><small style="color:var(--text-muted);">📅 Reportado: ${c.fecha_formateada || c.fecha_reporte}</small></p>
-                <p><small style="color:var(--text-muted);">🛠️ Toma de Caso: ${fechaToma}</small></p>
-                <p><small style="color:var(--text-muted);">✅ Cierre de Incidencia: ${fechaCierre}</small></p>
-                ${c.comentario_mejora ? `<p><strong>Comentario de Cierre:</strong> ${c.comentario_mejora}</p>` : ''}
-                ${c.archivo_url ? `<img src="${c.archivo_url}" class="img-preview-modal" alt="Foto Incidencia Ampliada">` : '<p><em>Sin foto adjunta.</em></p>'}
-            `;
-
-            document.getElementById('modal-detalle').style.display = 'flex';
-        }
-
-        /* 3. MANTENIMIENTO */
-        async function cargarProcesosData() {
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*&order=fecha_creacion.desc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-                });
-                cacheMantenimiento = await res.json();
-                if (!Array.isArray(cacheMantenimiento)) cacheMantenimiento = [];
-
-                const abiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
-                const tomadas = cacheMantenimiento.filter(m => (m.estado === 'Tomada' || m.estado === 'En Proceso') || (m.fecha_toma && m.estado !== 'Finalizada' && m.estado !== 'Cerrada')).length;
-                const cerradas = cacheMantenimiento.filter(m => m.estado === 'Finalizada' || m.estado === 'Cerrada' || m.estado === 'Resuelto').length;
-
-                document.getElementById('kpi-mant-abiertas').innerText = abiertas;
-                document.getElementById('kpi-mant-tomadas').innerText = tomadas;
-                document.getElementById('kpi-mant-cerradas').innerText = cerradas;
-
-                renderizarMantenimiento(cacheMantenimiento);
-            } catch (e) { console.error(e); }
-        }
-
-        function filtrarMantenimientoKpi(estado) {
-            document.querySelectorAll('#sec-mantenimiento .kpi-card-interactive').forEach(card => card.classList.remove('active-filter'));
-            
-            if (filtroMantKpiActivo === estado) {
-                filtroMantKpiActivo = null;
-            } else {
-                filtroMantKpiActivo = estado;
-                if (estado === 'Abierta') document.getElementById('kpi-mant-card-abierta').classList.add('active-filter');
-                else if (estado === 'Tomada') document.getElementById('kpi-mant-card-tomada').classList.add('active-filter');
-                else if (estado === 'Finalizada') document.getElementById('kpi-mant-card-cerrada').classList.add('active-filter');
-            }
-
-            let filtrados = cacheMantenimiento;
-            if (filtroMantKpiActivo === 'Abierta') {
-                filtrados = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma);
-            } else if (filtroMantKpiActivo === 'Tomada') {
-                filtrados = cacheMantenimiento.filter(m => (m.estado === 'Tomada' || m.estado === 'En Proceso') || (m.fecha_toma && m.estado !== 'Finalizada' && m.estado !== 'Cerrada'));
-            } else if (filtroMantKpiActivo === 'Finalizada') {
-                filtrados = cacheMantenimiento.filter(m => m.estado === 'Finalizada' || m.estado === 'Cerrada');
-            }
-
-            renderizarMantenimiento(filtrados);
-        }
-
-        function renderizarMantenimiento(data) {
-            const container = document.getElementById('mantenimiento-list');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>Sin órdenes de mantenimiento pendientes.</p>';
-                return;
-            }
-
-            container.innerHTML = data.map(item => {
-                let badgeClass = 'badge-danger';
-                let borderColor = 'var(--danger)';
-                let estadoVisual = item.estado || 'Abierta';
-
-                if (item.estado === 'Finalizada' || item.estado === 'Cerrada') {
-                    badgeClass = 'badge-success';
-                    borderColor = 'var(--accent-teal)';
-                    estadoVisual = 'Finalizada';
-                } else if (item.estado === 'Tomada' || item.fecha_toma) {
-                    badgeClass = 'badge-warning';
-                    borderColor = 'var(--warning)';
-                    estadoVisual = 'En Curso';
-                }
-
-                const duracion = calcularTiempoResolucion(item.fecha_creacion, item.fecha_cierre);
-
-                const imagenHtml = item.url_foto 
-                    ? `<div class="card-img-container"><img src="${item.url_foto}" class="card-img" alt="Foto Mantenimiento" loading="lazy"></div>`
-                    : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin foto adjunta</span></div>`;
-
-                return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleMantenimiento(${item.id})">
-                        <div>
-                            <div class="card-header">
-                                <span>OT #${item.id}</span>
-                                <span class="badge ${badgeClass}">${estadoVisual}</span>
-                            </div>
-                            ${imagenHtml}
-                            <p style="font-weight:600; margin: 6px 0; font-size: 0.95rem;">${item.descripcion || 'Sin descripción'}</p>
-                            <p style="margin: 2px 0;"><small>⚙️ <strong>Área:</strong> ${item.area || 'Planta'}</small></p>
-                            <p style="margin: 2px 0;"><small>🚨 <strong>Urgencia:</strong> ${item.urgencia || 'Normal'}</small></p>
-                        </div>
-                        <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; border-top: 1px solid var(--border-color); padding-top: 8px;">
-                            <span>⏱️ <strong>${duracion}</strong></span>
-                            <span style="color: var(--accent-teal); font-weight: 600;">Ver Ficha ➔</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function verDetalleMantenimiento(id) {
-            const m = cacheMantenimiento.find(item => item.id === id);
-            if (!m) return;
-
-            let estadoVisual = m.estado || 'Abierta';
-            if (m.fecha_toma && m.estado !== 'Finalizada' && m.estado !== 'Cerrada') estadoVisual = 'En Curso';
-
-            document.getElementById('modal-det-titulo').innerText = `Mantenimiento #${m.id} - ${m.area || 'General'}`;
-            document.getElementById('modal-det-badge').innerText = estadoVisual;
-
-            const tiempoResolucion = calcularTiempoResolucion(m.fecha_creacion, m.fecha_cierre);
-            const fechaToma = m.fecha_toma ? new Date(m.fecha_toma).toLocaleString('es-AR') : 'Sin tomar por equipo técnico';
-            const fechaCierre = m.fecha_cierre ? new Date(m.fecha_cierre).toLocaleString('es-AR') : 'En ejecución';
-
-            document.getElementById('modal-det-body').innerHTML = `
-                <p><strong>Informante:</strong> ${m["Nombre y Apellido"] || 'Anónimo'}</p>
-                <p><strong>Descripción de Falla:</strong> ${m.descripcion}</p>
-                <p><strong>Nivel de Urgencia:</strong> <span class="badge badge-warning">${m.urgencia || 'Normal'}</span></p>
-                <p><strong>Tiempo Total de Respuesta:</strong> <span style="color: var(--accent-teal); font-weight:700;">${tiempoResolucion}</span></p>
-                <hr style="border-color: var(--border-color); margin: 12px 0;">
-                <p><small style="color:var(--text-muted);">📅 Creado: ${new Date(m.fecha_creacion).toLocaleString('es-AR')}</small></p>
-                <p><small style="color:var(--text-muted);">🛠️ Inicio de Trabajo: ${fechaToma}</small></p>
-                <p><small style="color:var(--text-muted);">✅ Cierre Técnico: ${fechaCierre}</small></p>
-                ${m.comentario_cierre ? `<p><strong>Comentario de Cierre:</strong> ${m.comentario_cierre}</p>` : ''}
-                ${m.url_foto ? `<img src="${m.url_foto}" class="img-preview-modal" alt="Foto Mantenimiento Ampliada">` : '<p><em>Sin foto adjunta.</em></p>'}
-            `;
-
-            document.getElementById('modal-detalle').style.display = 'flex';
-        }
-
-        function cerrarModalDetalle() {
-            document.getElementById('modal-detalle').style.display = 'none';
-        }
-
-        /* 4. LOGÍSTICA */
-        async function cargarLogisticaData() {
-            const container = document.getElementById('logistica-list');
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*&cant_pendiente=gt.0`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-                });
-                const data = await res.json();
-                if (!Array.isArray(data) || data.length === 0) {
-                    container.innerHTML = '<p>No hay despachos pendientes.</p>';
-                    return;
-                }
-                container.innerHTML = data.map(item => `
-                    <div class="card" style="border-left: 4px solid var(--blue-info);">
-                        <div class="card-header">
-                            <span>SO: ${item.pedido_so || 'Sin SO'}</span>
-                            <span class="badge badge-info">${item.cant_pendiente} pzas</span>
-                        </div>
-                        <p>Cliente: <strong>${item.cliente || 'Consumidor Final'}</strong></p>
-                    </div>
-                `).join('');
-            } catch (e) { console.error(e); }
-        }
-
-        /* 5. BIENESTAR ORGANIZACIONAL */
-        async function cargarBienestarData() {
-            const container = document.getElementById('bienestar-list');
-            container.innerHTML = '<p style="color: var(--text-muted);">Cargando nómina y auditorías desde Supabase...</p>';
-
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-                });
-
-                if (!res.ok) throw new Error(`Status ${res.status}: ${res.statusText}`);
-
-                cacheRankingBienestar = await res.json();
-
-                if (!Array.isArray(cacheRankingBienestar) || cacheRankingBienestar.length === 0) {
-                    container.innerHTML = '<p>No se encontraron operarios activos en la base de datos.</p>';
-                    return;
-                }
-
-                actualizarKpisBienestar(cacheRankingBienestar);
-                renderizarRankingBienestar(cacheRankingBienestar);
-
-            } catch (e) {
-                console.error("Error en módulo Bienestar:", e);
-                container.innerHTML = `<p style="color: var(--danger);">❌ Error de conexión al obtener el ranking: ${e.message}</p>`;
-            }
-        }
-
-        function actualizarKpisBienestar(data) {
-            const totalOps = data.length;
-            const conAuditorias = data.filter(o => parseInt(o.total_auditorias) > 0);
-            const sumaPct = conAuditorias.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
-            const promGeneral = conAuditorias.length > 0 ? (sumaPct / conAuditorias.length).toFixed(1) : "0.0";
-            const requierenApoyo = data.filter(o => o.nivel_desempeno === 'REQUIERE_APOYO').length;
-
-            document.getElementById('kpi-bie-promedio').innerText = `${promGeneral}%`;
-            document.getElementById('kpi-bie-auditados').innerText = `${conAuditorias.length} / ${totalOps}`;
-            document.getElementById('kpi-bie-apoyo').innerText = requierenApoyo;
-        }
-
-        function renderizarRankingBienestar(data) {
-            const container = document.getElementById('bienestar-list');
-            if (!Array.isArray(data) || data.length === 0) {
-                container.innerHTML = '<p>No hay coincidencias con el filtro aplicado.</p>';
-                return;
-            }
-
-            container.innerHTML = data.map(item => {
-                const pos = item.posicion_ranking;
-                const tieneAuditorias = parseInt(item.total_auditorias) > 0;
-                
-                let badgePosicion = `<span class="badge">#${pos}</span>`;
-                let borderColor = 'var(--border-color)';
-
-                if (tieneAuditorias) {
-                    if (pos === 1) { badgePosicion = `<span class="badge badge-gold">🥇 #1</span>`; borderColor = 'var(--gold)'; }
-                    else if (pos === 2) { badgePosicion = `<span class="badge badge-silver">🥈 #2</span>`; borderColor = 'var(--silver)'; }
-                    else if (pos === 3) { badgePosicion = `<span class="badge badge-bronze">🥉 #3</span>`; borderColor = 'var(--bronze)'; }
-                }
-
-                let badgeNivel = `<span class="badge badge-info">SIN AUDITAR</span>`;
-                if (item.nivel_desempeno === 'EXCELENTE') badgeNivel = `<span class="badge badge-success">EXCELENTE</span>`;
-                else if (item.nivel_desempeno === 'CONSOLIDACION') badgeNivel = `<span class="badge badge-info">CONSOLIDACIÓN</span>`;
-                else if (item.nivel_desempeno === 'REQUIERE_APOYO') badgeNivel = `<span class="badge badge-warning">REQUIERE APOYO</span>`;
-
-                return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleOperario(${item.persona_id})">
-                        <div class="card-header">
-                            <span>${item.Operario}</span>
-                            ${badgePosicion}
-                        </div>
-                        <p style="margin: 4px 0;">
-                            <strong>Promedio:</strong> 
-                            <span style="font-size: 1.2rem; color: ${tieneAuditorias ? 'var(--accent-teal)' : 'var(--text-muted)'};">
-                                ${tieneAuditorias ? item.cumplimiento_promedio_pct + '%' : 'S/D'}
-                            </span> 
-                            <small>(${item.puntaje_promedio} / 10)</small>
-                        </p>
-                        <p><small>👥 <strong>Equipo:</strong> ${item.Equipos || 'General'}</small></p>
-                        <p><small>📊 <strong>Auditorías:</strong> ${item.total_auditorias}</small></p>
-                        <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                            ${badgeNivel}
-                            <small style="color: var(--text-muted);">Detalle ➔</small>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function filtrarRankingBienestar() {
-            const texto = document.getElementById('filtro-bie-nombre').value.toLowerCase();
-            const nivel = document.getElementById('filtro-bie-nivel').value;
-
-            const filtrados = cacheRankingBienestar.filter(op => {
-                const coincideNombre = (op.Operario || '').toLowerCase().includes(texto);
-                const coincideNivel = (nivel === 'TODOS') || (op.nivel_desempeno === nivel);
-                return coincideNombre && coincideNivel;
+            // Agrupar por Familia / Modelo
+            const familiasMap = {};
+            moldesEquipo.forEach(m => {
+                const fam = m.producto ? m.producto.split(' ')[0] : 'General';
+                if (!familiasMap[fam]) familiasMap[fam] = [];
+                familiasMap[fam].push(m);
             });
 
-            renderizarRankingBienestar(filtrados);
+            container.innerHTML = Object.keys(familiasMap).map(fam => {
+                const moldesFam = familiasMap[fam];
+                const idsMoldes = moldesFam.map(m => m.n_molde);
+                const desviosFam = cacheHistoricoDesvios.filter(d => idsMoldes.includes(d.n_molde));
+
+                const desvioProm = desviosFam.length > 0
+                    ? (desviosFam.reduce((acc, curr) => acc + parseFloat(curr.desvio_promedio_min || 0), 0) / desviosFam.length).toFixed(1)
+                    : "0.0";
+
+                return `
+                    <div class="card card-interactive" style="border-left: 4px solid var(--blue-info);" onclick="navegarProcesos('MOLDES', '${equipo}', '${fam}')">
+                        <div class="card-header">
+                            <span>Familia: ${fam}</span>
+                            <span class="badge badge-info">${moldesFam.length} Moldes</span>
+                        </div>
+                        <p>⏱️ Desvío Promedio Familia: <strong>+${desvioProm} min</strong></p>
+                        <div style="margin-top: 12px; text-align: right;">
+                            <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Tiempos por Molde ➔</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
-        function verDetalleOperario(personaId) {
-            const op = cacheRankingBienestar.find(p => p.persona_id === personaId);
-            if (!op) return;
+        // NIVEL 3: TABLA DE TIEMPOS POR MOLDE (TEÓRICO VS REAL)
+        function renderizarNivelMoldes(equipo, familia) {
+            const container = document.getElementById('view-proc-moldes');
+            container.style.display = 'block';
 
-            document.getElementById('modal-op-nombre').innerText = op.Operario;
-            document.getElementById('modal-op-posicion').innerText = `Puesto Ranking: #${op.posicion_ranking}`;
+            const moldesFiltrados = cacheEficienciaMoldes.filter(m => 
+                m.equipo_planificacion === equipo && 
+                (m.producto || '').startsWith(familia)
+            );
 
-            const historialFormateado = (op.historial_puntajes || '').split(' | ').join(' -> ');
-            const fechaUltima = op.ultima_auditoria_fecha ? new Date(op.ultima_auditoria_fecha).toLocaleDateString('es-AR') : 'Sin registros';
+            container.innerHTML = `
+                <table class="table-teal">
+                    <thead>
+                        <tr>
+                            <th>N° Molde</th>
+                            <th>Producto</th>
+                            <th>Tiempo Objetivo (Teórico)</th>
+                            <th>Tiempo Real Promedio</th>
+                            <th>Desvío Promedio</th>
+                            <th>Peor Desvío</th>
+                            <th>% Incumplimiento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${moldesFiltrados.map(m => {
+                            const desvio = cacheHistoricoDesvios.find(d => d.n_molde === m.n_molde) || {};
+                            const teo = m.tiempo_objetivo_min || '--';
+                            const realProm = desvio.desvio_promedio_min ? (parseFloat(teo) + parseFloat(desvio.desvio_promedio_min)).toFixed(1) : teo;
+                            const pct = desvio.porcentaje_incumplimiento || '0.0';
 
-            document.getElementById('modal-op-body').innerHTML = `
-                <p><strong>Puntaje Promedio:</strong> ${op.puntaje_promedio} / 10 (${op.cumplimiento_promedio_pct}%)</p>
-                <p><strong>Nivel de Desempeño:</strong> ${op.nivel_desempeno}</p>
-                <p><strong>Equipos Activos:</strong> ${op.Equipos || 'General'}</p>
-                <p><strong>Estado RRHH:</strong> ${op.estado_rrhh}</p>
-                <hr style="border-color: var(--border-color); margin: 12px 0;">
-                <p><strong>ID Odoo:</strong> ${op.id_odoo || 'N/A'} | <strong>Tag RFID:</strong> <code>${op.numero_tag || 'Sin Tag'}</code></p>
-                <p><strong>Total de Auditorías:</strong> ${op.total_auditorias}</p>
-                <p><strong>Historial Secuencial:</strong> <br><span style="color: var(--accent-teal);">${historialFormateado}</span></p>
-                <p><small style="color: var(--text-muted);">Última Auditoría realizada: ${fechaUltima}</small></p>
-            `;
+                            let badge = 'badge-success';
+                            if (parseFloat(pct) > 30) badge = 'badge-danger';
+                            else if (parseFloat(pct) > 10) badge = 'badge-warning';
 
-            const btnPdf = document.getElementById('btn-gen-pdf');
-            btnPdf.onclick = () => dispararGeneracionPDF(op.Operario, op.Equipos, op.puntaje_promedio, op.nivel_desempeno);
-
-            document.getElementById('modal-operario').style.display = 'flex';
-        }
-
-        function cerrarModalOperario() {
-            document.getElementById('modal-operario').style.display = 'none';
-        }
-
-        async function dispararGeneracionPDF(operario, equipo, nota, desempeno) {
-            const btn = document.getElementById('btn-gen-pdf');
-            btn.disabled = true;
-            btn.innerText = "⏳ Procesando en n8n...";
-
-            const payload = {
-                operario: operario.trim(),
-                equipo: (equipo || 'General').trim(),
-                puesto: 'Operario',
-                nota: nota,
-                desempeño: desempeno,
-                comentarios: `Reporte generado desde Celotti OS. Promedio de auditoría: ${nota}/10.`,
-                fecha: new Date().toISOString().split('T')[0]
-            };
-
-            try {
-                const res = await fetch(WEBHOOK_N8N_PDF, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    alert(`✅ Solicitud enviada a n8n. El PDF se adjuntará en Odoo y se enviará por Telegram.`);
-                } else {
-                    alert(`⚠️ Error en n8n al procesar el PDF (Status ${res.status}).`);
-                }
-            } catch (err) {
-                console.error("Error disparando Webhook de n8n:", err);
-                alert("❌ Error de conexión con el servidor de automatización n8n.");
-            } finally {
-                btn.disabled = false;
-                btn.innerText = "📄 Generar PDF (n8n)";
-            }
-        }
-
-        /* 6. INDICADORES Y MODAL DE ORIGEN */
-        async function cargarIndicadoresData() {
-            try {
-                if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0) {
-                    const [resEf, resCal, resMant, resBien, resDem] = await Promise.all([
-                        fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
-                    ]);
-
-                    cacheEficienciaMoldes = await resEf.json();
-                    cacheCalidad = await resCal.json();
-                    cacheMantenimiento = await resMant.json();
-                    cacheRankingBienestar = await resBien.json();
-                    cacheDemandaOdoo = await resDem.json();
-                }
-
-                const totalMoldes = cacheEficienciaMoldes.length || 1;
-                const moldesEnProduccion = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'ARMANDO' || m.estado_flujo === 'POR LLENAR' || m.estado_flujo === 'FINALIZADO').length;
-                const disponibilidadPct = ((moldesEnProduccion / totalMoldes) * 100).toFixed(1);
-                document.getElementById('kpi-ind-disponibilidad').innerText = `${disponibilidadPct}%`;
-
-                const alertasCriticas = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
-                document.getElementById('kpi-ind-alertas-rfid').innerText = alertasCriticas;
-
-                const totalPiezasPendientes = cacheDemandaOdoo.reduce((acc, curr) => acc + (parseInt(curr.cant_pendiente) || 0), 0);
-                document.getElementById('kpi-ind-backlog').innerText = `${totalPiezasPendientes} pzas`;
-
-                const llenadosHoy = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO').length;
-                document.getElementById('kpi-ind-llenados').innerText = llenadosHoy;
-
-                const calAbiertas = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
-                document.getElementById('kpi-ind-cal-abiertos').innerText = calAbiertas;
-
-                const casosCerradosCalidad = cacheCalidad.filter(c => (c.estado === 'Resuelto' || c.estado === 'Cerrado') && c.fecha_reporte && c.fecha_resolucion);
-                let sumaHorasCal = 0;
-                casosCerradosCalidad.forEach(c => {
-                    const diff = (new Date(c.fecha_resolucion) - new Date(c.fecha_reporte)) / (1000 * 60 * 60);
-                    if (diff > 0) sumaHorasCal += diff;
-                });
-                const mttrCalidad = casosCerradosCalidad.length > 0 ? (sumaHorasCal / casosCerradosCalidad.length).toFixed(1) : "0.0";
-                document.getElementById('kpi-ind-mttr-calidad').innerText = `${mttrCalidad}h`;
-
-                const mantAbiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
-                document.getElementById('kpi-ind-mant-abiertas').innerText = mantAbiertas;
-
-                const opsAuditados = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0).length;
-                document.getElementById('kpi-ind-ops-auditados').innerText = `${opsAuditados} / ${cacheRankingBienestar.length}`;
-
-                const opsConAud = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0);
-                const sumaTeal = opsConAud.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
-                const tealIndex = opsConAud.length > 0 ? (sumaTeal / opsConAud.length).toFixed(1) : "0.0";
-                document.getElementById('kpi-ind-salud-teal').innerText = `${tealIndex}%`;
-
-                const despachosPendientes = cacheDemandaOdoo.filter(d => (parseInt(d.cant_pendiente) || 0) > 0).length;
-                document.getElementById('kpi-ind-despachos').innerText = `${despachosPendientes} SO`;
-
-            } catch (err) { console.error("Error al consolidar Indicadores Realtime:", err); }
-        }
-
-        function mostrarOrigenKpi(tipo) {
-            const tituloEl = document.getElementById('modal-kpi-titulo');
-            const fuenteEl = document.getElementById('modal-kpi-fuente');
-            const bodyEl = document.getElementById('modal-kpi-body');
-
-            let htmlTabla = '';
-
-            if (tipo === 'disponibilidad' || tipo === 'llenados' || tipo === 'alertas-rfid') {
-                fuenteEl.innerText = "vista: reporte_eficiencia_moldes";
-                let datos = cacheEficienciaMoldes;
-
-                if (tipo === 'llenados') {
-                    tituloEl.innerText = "Moldes Llenados Hoy (FINALIZADOS)";
-                    datos = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO');
-                } else if (tipo === 'alertas-rfid') {
-                    tituloEl.innerText = "Alertas Críticas de Productividad RFID";
-                    datos = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO');
-                } else {
-                    tituloEl.innerText = "Matriz Completa de Disponibilidad de Moldes";
-                }
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Molde #</th>
-                                <th>Producto</th>
-                                <th>Equipo</th>
-                                <th>Estado Flujo</th>
-                                <th>Alerta</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${datos.map(m => `
+                            return `
                                 <tr>
                                     <td><strong>#${m.n_molde}</strong></td>
                                     <td>${m.producto}</td>
-                                    <td>${m.equipo_planificacion || 'General'}</td>
-                                    <td>${m.estado_flujo}</td>
-                                    <td>${m.alerta_productividad}</td>
+                                    <td>${teo} min</td>
+                                    <td style="font-weight:700;">${realProm} min</td>
+                                    <td style="color: var(--warning);">+${desvio.desvio_promedio_min || 0} min</td>
+                                    <td style="color: var(--danger);">${desvio.peor_desvio_registrado || 0} min</td>
+                                    <td><span class="badge ${badge}">${pct}%</span></td>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } 
-            else if (tipo === 'backlog' || tipo === 'despachos') {
-                fuenteEl.innerText = "tabla: ordenes_trabajo_pendientes (Odoo Sync)";
-                tituloEl.innerText = tipo === 'backlog' ? "Backlog Detallado de Piezas Pendientes" : "Órdenes de Venta (SO) Pendientes de Despacho";
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Pedido SO</th>
-                                <th>Cliente</th>
-                                <th>Producto</th>
-                                <th>Cant. Pendiente</th>
-                                <th>Orden Fab (MO)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${cacheDemandaOdoo.map(d => `
-                                <tr>
-                                    <td><strong>${d.pedido_so || 'Sin SO'}</strong></td>
-                                    <td>${d.cliente || 'Consumidor Final'}</td>
-                                    <td>${d.producto || 'N/A'}</td>
-                                    <td style="color: var(--warning); font-weight:700;">${d.cant_pendiente} pzas</td>
-                                    <td>${d.orden_fabricacion_mo || 'N/A'}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            else if (tipo === 'cal-abiertos' || tipo === 'mttr-calidad') {
-                fuenteEl.innerText = "vista: vista_gestion_calidad_app";
-                let datos = cacheCalidad;
-
-                if (tipo === 'cal-abiertos') {
-                    tituloEl.innerText = "Incidencias de Calidad Abiertas (Sin Tomar)";
-                    datos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso);
-                } else {
-                    tituloEl.innerText = "Casos Cerrados para Cálculo de MTTR Calidad";
-                    datos = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado');
-                }
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Auditor</th>
-                                <th>Descripción Problema</th>
-                                <th>Responsable</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${datos.map(c => `
-                                <tr>
-                                    <td><small>${c.fecha_formateada || c.fecha_reporte}</small></td>
-                                    <td>${c.auditor}</td>
-                                    <td>${c.descripcion_problema}</td>
-                                    <td>${c.responsable_calidad || 'Sin Asignar'}</td>
-                                    <td><span class="badge ${c.estado === 'Resuelto' ? 'badge-success' : 'badge-danger'}">${c.estado || 'Abierto'}</span></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            else if (tipo === 'mant-abiertas') {
-                fuenteEl.innerText = "tabla: registro_mejoras";
-                tituloEl.innerText = "Órdenes de Mantenimiento Pendientes";
-                const datos = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma);
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>OT #</th>
-                                <th>Informante</th>
-                                <th>Descripción de Falla</th>
-                                <th>Área</th>
-                                <th>Urgencia</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${datos.map(m => `
-                                <tr>
-                                    <td><strong>#${m.id}</strong></td>
-                                    <td>${m["Nombre y Apellido"] || 'Anónimo'}</td>
-                                    <td>${m.descripcion}</td>
-                                    <td>${m.area || 'Planta'}</td>
-                                    <td><span class="badge badge-warning">${m.urgencia || 'Normal'}</span></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            else if (tipo === 'ops-auditados' || tipo === 'salud-teal') {
-                fuenteEl.innerText = "vista: ranking_operarios_inteligente";
-                tituloEl.innerText = tipo === 'ops-auditados' ? "Cobertura de Operarios Auditados" : "Índice de Salud Organizacional Teal por Operario";
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Ranking</th>
-                                <th>Operario</th>
-                                <th>Equipo</th>
-                                <th>Promedio</th>
-                                <th>Auditorías</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${cacheRankingBienestar.map(o => `
-                                <tr>
-                                    <td>#${o.posicion_ranking}</td>
-                                    <td><strong>${o.Operario}</strong></td>
-                                    <td>${o.Equipos || 'General'}</td>
-                                    <td style="color: var(--accent-teal); font-weight:700;">${o.cumplimiento_promedio_pct}%</td>
-                                    <td>${o.total_auditorias} reg.</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            bodyEl.innerHTML = htmlTabla || '<p>No hay datos registrados para esta métrica.</p>';
-            document.getElementById('modal-kpi-origen').style.display = 'flex';
-        }
-
-        function cerrarModalKpiOrigen() {
-            document.getElementById('modal-kpi-origen').style.display = 'none';
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
         }
 
         // Carga inicial
-        cargarPlanificacionData();
+        switchTab('planificacion');
     </script>
 </body>
 </html>
