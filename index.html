@@ -138,7 +138,7 @@
             color: var(--text-muted);
             font-weight: 600;
         }
-        input[type="date"], select, input[type="text"], textarea {
+        input[type="date"], input[type="number"], select, input[type="text"], textarea {
             background: var(--bg-dark);
             border: 1px solid var(--border-color);
             color: var(--text-main);
@@ -305,6 +305,9 @@
             max-height: 85vh;
             overflow-y: auto;
         }
+        .modal-box-ancho {
+            max-width: 900px;
+        }
         .btn-close-modal {
             position: absolute;
             top: 16px;
@@ -463,6 +466,113 @@
             border-top: 1px dashed var(--border-color);
             margin-top: 8px;
             padding-top: 6px;
+        }
+
+        /* KPIs TEAL */
+        .grid-kpis-teal {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .kpi-teal {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .kpi-teal:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-teal);
+        }
+        .kpi-teal-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .kpi-teal-num {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: var(--bg-dark);
+            background: var(--accent-teal);
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .kpi-teal-valor {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-top: 4px;
+        }
+        .kpi-teal-unidad {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+        .kpi-teal-delta {
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .chip-estado {
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .chip-ok { border-color: var(--accent-teal); color: var(--accent-teal); }
+        .chip-parcial { border-color: var(--warning); color: #fcd34d; }
+        .chip-integracion { border-color: var(--danger); color: #fca5a5; }
+        .meta-barra {
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .meta-barra > div {
+            height: 100%;
+            border-radius: 3px;
+        }
+        .kpi-pendiente {
+            border-style: dashed;
+            opacity: 0.85;
+        }
+        .bloque-detalle {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.88rem;
+        }
+        .bloque-detalle h4 {
+            margin: 0 0 8px;
+            color: var(--accent-teal);
+        }
+        .barra-pareto {
+            height: 10px;
+            background: var(--danger);
+            border-radius: 3px;
+        }
+        .arbol-kpis {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: pre;
+            overflow-x: auto;
+            margin: 8px 0 0;
         }
     </style>
 </head>
@@ -679,66 +789,71 @@
             <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
-        <!-- 7. SOLAPA INDICADORES REALTIME -->
+        <!-- 7. SOLAPA INDICADORES TEAL -->
         <div id="sec-indicadores" style="display: none;">
-            <div class="kpi-container" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('disponibilidad')">
-                    <div class="kpi-title">1. Disponibilidad Moldes</div>
-                    <div class="kpi-value" id="kpi-ind-disponibilidad" style="color: var(--accent-teal);">0%</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Período:</label>
+                    <select id="filtro-kpi-periodo" onchange="cargarIndicadoresData()">
+                        <option value="7">Últimos 7 días</option>
+                        <option value="30" selected>Últimos 30 días</option>
+                        <option value="90">Últimos 90 días</option>
+                    </select>
                 </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--danger);" onclick="mostrarOrigenKpi('alertas-rfid')">
-                    <div class="kpi-title">2. Alertas RFID Críticas</div>
-                    <div class="kpi-value" id="kpi-ind-alertas-rfid" style="color: var(--danger);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
+                <div class="filter-group">
+                    <label>Mirada:</label>
+                    <select id="filtro-kpi-equipo" onchange="renderizarKpisTeal()">
+                        <option value="PLANTA">🏭 Planta completa</option>
+                        <option value="Amarillo">🟡 Equipo Amarillo</option>
+                        <option value="Azul">🔵 Equipo Azul</option>
+                        <option value="Rojo">🔴 Equipo Rojo</option>
+                        <option value="Verde">🟢 Equipo Verde</option>
+                    </select>
                 </div>
+                <div class="filter-group" style="align-self: center; font-size: 0.85rem; color: var(--text-muted);">
+                    ℹ️ <em id="kpi-info-periodo">Cada KPI se compara contra el período anterior del mismo largo.</em>
+                </div>
+            </div>
+
+            <div id="kpis-teal-grid" class="grid-kpis-teal">Cargando KPIs Teal...</div>
+
+            <h3 style="color: var(--accent-teal); margin: 0 0 14px;">⚡ Pulso Operativo en Vivo</h3>
+            <div class="kpi-container">
                 <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--warning);" onclick="mostrarOrigenKpi('backlog')">
-                    <div class="kpi-title">3. Backlog Pendiente Odoo</div>
+                    <div class="kpi-title">Backlog Pendiente Odoo</div>
                     <div class="kpi-value" id="kpi-ind-backlog" style="color: var(--warning);">0 pzas</div>
                     <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
                 </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('llenados')">
-                    <div class="kpi-title">4. Moldes Llenados Hoy</div>
-                    <div class="kpi-value" id="kpi-ind-llenados" style="color: var(--accent-teal);">0</div>
+                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--gold);" onclick="mostrarOrigenKpi('despachos')">
+                    <div class="kpi-title">Despachos Pendientes</div>
+                    <div class="kpi-value" id="kpi-ind-despachos" style="color: var(--gold);">0 SO</div>
                     <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
                 </div>
                 <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--danger);" onclick="mostrarOrigenKpi('cal-abiertos')">
-                    <div class="kpi-title">5. Calidad: Casos Abiertos</div>
+                    <div class="kpi-title">Calidad: Casos Sin Tomar</div>
                     <div class="kpi-value" id="kpi-ind-cal-abiertos" style="color: var(--danger);">0</div>
                     <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
                 </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--blue-info);" onclick="mostrarOrigenKpi('mttr-calidad')">
-                    <div class="kpi-title">6. MTTR Calidad (Promedio)</div>
-                    <div class="kpi-value" id="kpi-ind-mttr-calidad" style="color: var(--blue-info);">0h</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
                 <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--warning);" onclick="mostrarOrigenKpi('mant-abiertas')">
-                    <div class="kpi-title">7. Mantenimiento Pendiente</div>
+                    <div class="kpi-title">Mantenimiento Sin Tomar</div>
                     <div class="kpi-value" id="kpi-ind-mant-abiertas" style="color: var(--warning);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--blue-info);" onclick="mostrarOrigenKpi('ops-auditados')">
-                    <div class="kpi-title">8. Operarios Auditados</div>
-                    <div class="kpi-value" id="kpi-ind-ops-auditados" style="color: var(--blue-info);">0</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--accent-teal);" onclick="mostrarOrigenKpi('salud-teal')">
-                    <div class="kpi-title">9. Salud Org. (Teal Index)</div>
-                    <div class="kpi-value" id="kpi-ind-salud-teal" style="color: var(--accent-teal);">0.0%</div>
-                    <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
-                </div>
-                <div class="kpi-card kpi-card-interactive" style="border-top: 3px solid var(--gold);" onclick="mostrarOrigenKpi('despachos')">
-                    <div class="kpi-title">10. Despachos Pendientes</div>
-                    <div class="kpi-value" id="kpi-ind-despachos" style="color: var(--gold);">0 SO</div>
                     <small style="font-size:0.7rem; color:var(--text-muted);">Hacé clic para ver origen ➔</small>
                 </div>
             </div>
 
-            <div class="card" style="margin-top: 20px;">
-                <h3 style="margin-top:0; color: var(--accent-teal);">📊 Visión Holística Operativa Celotti SRL</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">
-                    Monitoreo en vivo alimentado por la arquitectura de Webhooks de n8n, lecturas RFID en puestos de desmolde/llenado y PostgreSQL en Supabase.
+            <div class="card" style="margin-top: 8px;">
+                <h3 style="margin-top:0; color: var(--accent-teal);">🌳 Cómo se conectan los KPIs</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
+                    La salud del equipo y la productividad mueven la calidad, el plan y la velocidad; eso mueve el OEE y los giros, y todo termina en margen y caja.
+                    Cada equipo es dueño de sus números y propone sus propias metas.
                 </p>
+                <div class="arbol-kpis">                 🎯 Margen por Molde-Día (6)
+                /            |              \
+     OEE de Molde (1)   Giros/Molde (2)   Stock + Caja (8)
+      /      |      \         |                |
+ FPY (3)  Plan (4)  Velocidad (9)        OTIF Cliente (5)
+               \         |         /
+          Productividad (7)  ·  Pulso Teal (10)</div>
             </div>
         </div>
     </div>
@@ -759,15 +874,15 @@
     </div>
 
     <div id="modal-kpi-origen" class="modal-overlay" style="display: none;">
-        <div class="modal-box">
+        <div class="modal-box modal-box-ancho">
             <button class="btn-close-modal" onclick="cerrarModalKpiOrigen()" title="Cerrar ventana">✕</button>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-right: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-right: 30px; gap: 10px;">
                 <h3 id="modal-kpi-titulo" style="margin: 0; color: var(--accent-teal);">Origen del KPI</h3>
                 <span class="badge badge-info" id="modal-kpi-fuente">Fuente</span>
             </div>
             <div id="modal-kpi-body"></div>
             <div style="margin-top: 20px; text-align: right;">
-                <button class="btn" onclick="cerrarModalKpiOrigen()">Cerrar Origen</button>
+                <button class="btn" onclick="cerrarModalKpiOrigen()">Cerrar</button>
             </div>
         </div>
     </div>
@@ -838,6 +953,11 @@
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
         let cacheTiemposMoldes = [];
+
+        // KPIs Teal: período actual, período anterior y metas propuestas por los equipos
+        let cacheKpisTeal = { actual: null, anterior: null };
+        let cacheKpiMetas = [];
+        let modoProductividadKg = false;
 
         // null = tiempo real; 'YYYY-MM-DD' = foto histórica de ese día
         let modoFotoFecha = null;
@@ -935,6 +1055,31 @@
             const n = num(v);
             if (n === null) return '--';
             return `${n > 0 ? '+' : ''}${n.toFixed(1)} min`;
+        }
+
+        function fmtPct(v) {
+            const n = num(v);
+            return n === null ? '--' : `${(n * 100).toFixed(1)}%`;
+        }
+
+        function fmtNum(v, dec = 1) {
+            const n = num(v);
+            return n === null ? '--' : n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+        }
+
+        function fmtMoneda(v) {
+            const n = num(v);
+            return n === null ? '--' : `$ ${Math.round(n).toLocaleString('es-AR')}`;
+        }
+
+        function fmtHoras(v) {
+            const n = num(v);
+            return n === null ? '--' : `${n.toFixed(1)} h`;
+        }
+
+        function capUno(v) {
+            const n = num(v);
+            return n === null ? null : Math.min(n, 1);
         }
 
         function fuenteHtml(fuentes) {
@@ -1076,7 +1221,7 @@
                 document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
                 cargarBienestarData();
             } else if(tab === 'indicadores') {
-                document.getElementById('tab-title').innerText = 'Indicadores y Dashboard Realtime Teal';
+                document.getElementById('tab-title').innerText = 'Indicadores Teal: Eficiencia, Calidad y Autogestión';
                 cargarIndicadoresData();
             }
         }
@@ -1673,6 +1818,7 @@
                         <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag} | <strong>N°:</strong> ${molde.n_molde ?? '--'}</small></p>
                         <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'} | 👥 <strong>Equipo:</strong> ${molde.Equipo || 'N/A'}</small></p>
                         <p><small>⏱️ <strong>Ciclo objetivo:</strong> ${molde.ciclo_min ?? '--'} min | <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
+                        <p><small>⚖️ <strong>Peso:</strong> ${molde.peso_kg ?? '--'} kg | 💲 <strong>Costo:</strong> ${molde.costo_estandar != null ? fmtMoneda(molde.costo_estandar) : '--'} | <strong>Precio:</strong> ${molde.precio_venta != null ? fmtMoneda(molde.precio_venta) : '--'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${argJs(molde.Estado)}')">
                                 ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
@@ -2565,66 +2711,558 @@
             }
         }
 
-        /* 7. INDICADORES Y MODAL DE ORIGEN */
-        async function cargarIndicadoresData() {
-            try {
-                if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0 || cacheRankingBienestar.length === 0) {
-                    const [ef, cal, mant, bien, dem] = await Promise.all([
-                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: SB_HEADERS }), 'reporte_eficiencia_moldes'),
-                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }), 'vista_gestion_calidad_app'),
-                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }), 'registro_mejoras'),
-                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, { headers: SB_HEADERS }), 'ranking_operarios_inteligente'),
-                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes')
-                    ]);
+        /* 7. INDICADORES TEAL (10 KPIs) */
 
-                    cacheEficienciaMoldes = ef.map((m, i) => ({ ...m, _key: `R${i}` }));
-                    cacheCalidad = cal;
-                    cacheMantenimiento = mant;
-                    cacheRankingBienestar = deduplicarOperarios(bien);
-                    cacheDemandaOdoo = dem;
+        function datoEquipo(dataset, equipo) {
+            if (!dataset || !Array.isArray(dataset.equipos)) return null;
+            return dataset.equipos.find(e => e.equipo === equipo) || null;
+        }
+
+        // Definición de los 10 KPIs: cómo se calculan, cómo se muestran y de dónde salen
+        const KPI_TEAL = [
+            {
+                id: 'oee', n: 1, icono: '⚙️', titulo: 'OEE de Molde', tipo: 'pct', metaSugerida: 0.65, serie: 'oee',
+                descripcion: 'Cuánto del potencial de cada molde se convierte en piezas buenas. Junta en un número las tres pérdidas: molde parado, molde lento y pieza defectuosa.',
+                formula: 'Disponibilidad × Rendimiento × Calidad. Disponibilidad = molde-días con actividad / (moldes activos × días de producción). Rendimiento = Σ ciclo objetivo / Σ ciclo real (tope 100%). Calidad = FPY de desmolde.',
+                fuente: 'historico_eficiencia_moldes · fn_ciclos_unificados · vista_kpi_desmolde · planificacion_moldes',
+                valor: (e) => e?.oee,
+                sub: (e, d) => e ? `Disp. ${fmtPct(e.disponibilidad)} · Rend. ${fmtPct(capUno(e.rendimiento))} · Cal. ${fmtPct(e.calidad ?? datoEquipo(d, 'PLANTA')?.calidad)}` : '',
+                estado: (e) => !e || e.oee == null ? 'sin' : ((e.ciclos === 0 || e.calidad_es_planta) ? 'parcial' : 'ok'),
+                columnas: [
+                    ['Disponibilidad', e => fmtPct(e.disponibilidad)],
+                    ['Rendimiento', e => fmtPct(capUno(e.rendimiento))],
+                    ['Calidad', e => fmtPct(e.calidad) + (e.calidad_es_planta ? ' *' : '')],
+                    ['OEE', e => `<strong>${fmtPct(e.oee)}</strong>`],
+                    ['Ciclos medidos', e => e.ciclos]
+                ]
+            },
+            {
+                id: 'giros', n: 2, icono: '🔄', titulo: 'Giros por Molde', tipo: 'dec2', unidad: 'giros/molde·día', metaSugerida: 0.9,
+                descripcion: 'Cuántos llenados hace cada molde activo por día. Crecer en giros es crecer sin comprar moldes nuevos.',
+                formula: 'Eventos de LLENADO por antena (separados más de 60 min) / (moldes activos × días de producción). Molde ocioso = activo sin ningún llenado en el período.',
+                fuente: 'lecturas_rfid (zona Llenado) · config_zonas_rfid · planificacion_moldes (Estado = SI)',
+                valor: (e) => e?.giros,
+                sub: (e) => e ? `${e.eventos_llenado} llenados · ${e.moldes_activos} moldes activos · ${e.moldes_ociosos} ociosos` : '',
+                estado: (e) => !e || !e.moldes_activos ? 'sin' : 'ok',
+                columnas: [
+                    ['Moldes activos', e => e.moldes_activos],
+                    ['Llenados RFID', e => e.eventos_llenado],
+                    ['Giros/molde·día', e => `<strong>${fmtNum(e.giros, 2)}</strong>`],
+                    ['Moldes ociosos', e => e.moldes_ociosos]
+                ]
+            },
+            {
+                id: 'fpy', n: 3, icono: '💎', titulo: 'Calidad a la Primera (FPY)', tipo: 'pct', metaSugerida: 0.95, serie: 'fpy',
+                descripcion: 'Porcentaje de piezas que salen del desmolde sin ningún defecto, y cuánto dinero cuesta la no calidad.',
+                formula: 'FPY = piezas sin defecto / piezas inspeccionadas. Costo de No Calidad = Σ costo_estandar de las piezas con defecto.',
+                fuente: 'registro_desmolde_calidad · planificacion_moldes.costo_estandar',
+                valor: (e) => e?.calidad,
+                sub: (e) => e ? `${e.inspeccionadas} inspeccionadas · No calidad: ${e.copq != null ? fmtMoneda(e.copq) : 'falta costo'}` : '',
+                estado: (e) => !e || !e.inspeccionadas ? 'sin' : (e.defectuosas_sin_costo > 0 ? 'parcial' : 'ok'),
+                columnas: [
+                    ['Inspeccionadas', e => e.inspeccionadas],
+                    ['Sin defecto', e => e.sin_defecto],
+                    ['FPY', e => `<strong>${fmtPct(e.calidad)}</strong>`],
+                    ['Costo No Calidad', e => e.copq != null ? fmtMoneda(e.copq) : '--']
+                ]
+            },
+            {
+                id: 'plan', n: 4, icono: '📋', titulo: 'Cumplimiento del Plan', tipo: 'pct', metaSugerida: 0.9, serie: 'cumplimiento',
+                descripcion: 'Cuánto de lo que el equipo se comprometió a fabricar efectivamente lo fabricó. Es el compromiso del equipo, no una orden.',
+                formula: 'Moldes llenados / moldes programados (filas del histórico del día).',
+                fuente: 'historico_eficiencia_moldes',
+                valor: (e) => e?.cumplimiento,
+                sub: (e) => e ? `${e.llenados} de ${e.programados} moldes programados llenados` : '',
+                estado: (e) => !e || !e.programados ? 'sin' : 'ok',
+                columnas: [
+                    ['Programados', e => e.programados],
+                    ['Llenados', e => e.llenados],
+                    ['Cumplimiento', e => `<strong>${fmtPct(e.cumplimiento)}</strong>`]
+                ]
+            },
+            {
+                id: 'otif', n: 5, icono: '🚚', titulo: 'OTIF a Cliente', tipo: 'pct', integracion: true,
+                descripcion: 'Porcentaje de pedidos entregados en la fecha comprometida y completos. Conecta la planta con el cliente.',
+                formula: 'Pedidos entregados completos y a tiempo / pedidos entregados.',
+                fuente: 'Odoo sale.order (fecha compromiso) + stock.picking (fecha real de entrega)',
+                requiere: 'Ampliar el workflow de n8n que ya sincroniza Odoo para traer las entregas (stock.picking) con su fecha real y la fecha comprometida del pedido.'
+            },
+            {
+                id: 'margen', n: 6, icono: '🎯', titulo: 'Margen por Molde-Día', tipo: 'moneda', metaSugerida: null,
+                descripcion: 'Cuánta plata deja cada molde activo por día. Es la métrica central: si el molde es el cuello de botella, importa el margen por molde, no por pieza.',
+                formula: 'Σ (precio_venta − costo_estandar) de las piezas llenadas / (moldes activos × días de producción).',
+                fuente: 'historico_eficiencia_moldes · planificacion_moldes (precio_venta, costo_estandar)',
+                valor: (e) => e && e.llenados_con_margen > 0 ? e.margen_molde_dia : null,
+                sub: (e) => e ? `Margen total ${fmtMoneda(e.margen)} · ${e.llenados_con_margen}/${e.llenados} piezas con precio y costo` : '',
+                estado: (e) => !e ? 'sin' : (e.llenados_con_margen === 0 ? 'dato' : (e.llenados_con_margen < e.llenados ? 'parcial' : 'ok')),
+                requiere: 'Cargá precio_venta y costo_estandar por molde en planificacion_moldes (o sincronizalos desde Odoo con n8n).',
+                columnas: [
+                    ['Llenados', e => e.llenados],
+                    ['Con precio y costo', e => e.llenados_con_margen],
+                    ['Margen total', e => fmtMoneda(e.margen)],
+                    ['Margen/molde·día', e => `<strong>${e.llenados_con_margen > 0 ? fmtMoneda(e.margen_molde_dia) : '--'}</strong>`]
+                ]
+            },
+            {
+                id: 'productividad', n: 7, icono: '💪', titulo: 'Productividad', tipo: 'num1', metaSugerida: null,
+                unidadDinamica: () => modoProductividadKg ? 'kg/hora-persona' : 'piezas/hora-persona',
+                descripcion: 'Kg de hormigón producidos por cada hora trabajada, por equipo. Se mide en kg porque un pilar doble no es lo mismo que una losetita.',
+                formula: 'Σ (piezas llenadas × peso_kg) / horas fichadas del equipo. Sin peso cargado se muestra en piezas por hora-persona.',
+                fuente: 'historico_eficiencia_moldes · planificacion_moldes.peso_kg · vista_reporte_asistencia · Personas.equipo',
+                valor: (e) => e ? (modoProductividadKg ? e.kg_hh : e.piezas_hh) : null,
+                sub: (e) => e ? `${fmtNum(e.horas, 0)} h fichadas · ${modoProductividadKg ? fmtNum(e.kg, 0) + ' kg' : e.llenados + ' piezas'}` : '',
+                estado: (e) => !e || !num(e.horas) ? 'sin' : (!modoProductividadKg ? 'dato' : (e.llenados_con_peso < e.llenados ? 'parcial' : 'ok')),
+                requiere: 'Cargá peso_kg por molde en planificacion_moldes para medir en kg. Verificá que cada persona tenga su equipo en Personas.equipo.',
+                columnas: [
+                    ['Horas fichadas', e => fmtNum(e.horas, 0)],
+                    ['Piezas llenadas', e => e.llenados],
+                    ['Kg producidos', e => e.kg != null ? fmtNum(e.kg, 0) : '--'],
+                    ['Kg/HH', e => e.kg_hh != null ? fmtNum(e.kg_hh, 1) : '--'],
+                    ['Piezas/HH', e => fmtNum(e.piezas_hh, 2)]
+                ]
+            },
+            {
+                id: 'caja', n: 8, icono: '💰', titulo: 'Stock en Playa + Ciclo de Caja', tipo: 'num1', integracion: true,
+                descripcion: 'Días de venta parados en la playa de producto terminado y días que tarda un peso invertido en volver como cobranza. Define si el crecimiento se financia solo.',
+                formula: 'Días de stock = stock PT valorizado / costo de ventas diario. Ciclo de caja = días de cobro + días de inventario − días de pago.',
+                fuente: 'Odoo stock.quant + Xubio (cuentas a cobrar y a pagar)',
+                requiere: 'Integrar en n8n el stock valorizado de Odoo (stock.quant) y los saldos de clientes y proveedores de Xubio.'
+            },
+            {
+                id: 'velocidad', n: 9, icono: '⚡', titulo: 'Velocidad de Resolución', tipo: 'pct', metaSugerida: 0.8, global: true,
+                descripcion: 'Qué tan rápido el organismo detecta y cierra sus problemas de mantenimiento y calidad. Una organización viva se mide por su capacidad de autorreparación.',
+                formula: '% de casos cerrados en menos de 48 h. MTTR = horas promedio desde que se reporta hasta que se cierra. Toma = horas hasta que alguien toma el caso.',
+                fuente: 'registro_mejoras · gestion_calidad',
+                valor: (e, d) => d?.velocidad?.pct_48h,
+                sub: (e, d) => d?.velocidad ? `MTTR mant. ${fmtHoras(d.velocidad.mttr_mant_h)} · calidad ${fmtHoras(d.velocidad.mttr_cal_h)} · toma ${fmtHoras(d.velocidad.toma_prom_h)}` : '',
+                estado: (e, d) => !d?.velocidad || !d.velocidad.cerrados ? 'sin' : 'ok'
+            },
+            {
+                id: 'pulso', n: 10, icono: '🌱', titulo: 'Pulso Teal', tipo: 'pct', metaSugerida: 0.8, global: true,
+                descripcion: 'Si la organización realmente se autogestiona y está sana. Reemplaza al viejo "Teal Index", que medía cumplimiento ante un auditor.',
+                formula: 'Promedio de: Participación (% de personas activas que reportaron mejoras o incidencias), Toma rápida (% de casos tomados en menos de 24 h), Presencia (persona-días fichados / esperados) y Cuidado (% del plantel fuera de ART o enfermedad).',
+                fuente: 'Personas · registro_mejoras · gestion_calidad · vista_reporte_asistencia · feriados',
+                valor: (e, d) => d?.pulso?.valor,
+                sub: (e, d) => d?.pulso ? `Part. ${fmtPct(d.pulso.participacion)} · Toma ${fmtPct(d.pulso.toma_rapida)} · Pres. ${fmtPct(d.pulso.presencia)} · Cuid. ${fmtPct(d.pulso.cuidado)}` : '',
+                estado: (e, d) => d?.pulso?.valor == null ? 'sin' : 'ok'
+            }
+        ];
+
+        const ESTADOS_DATO = {
+            ok:          { clase: 'chip-ok',          texto: '✅ Datos completos' },
+            parcial:     { clase: 'chip-parcial',     texto: '🟡 Datos parciales' },
+            dato:        { clase: 'chip-parcial',     texto: '🟡 Falta dato maestro' },
+            integracion: { clase: 'chip-integracion', texto: '🔴 Requiere integración' },
+            sin:         { clase: '',                 texto: '⚪ Sin datos en el período' }
+        };
+
+        function formatearKpi(def, v) {
+            if (v === null || v === undefined || isNaN(v)) return '--';
+            if (def.tipo === 'pct') return fmtPct(v);
+            if (def.tipo === 'moneda') return fmtMoneda(v);
+            if (def.tipo === 'dec2') return fmtNum(v, 2);
+            return fmtNum(v, 1);
+        }
+
+        function unidadKpi(def) {
+            if (def.unidadDinamica) return def.unidadDinamica();
+            return def.unidad || '';
+        }
+
+        function equipoMirada(def) {
+            return def.global ? 'PLANTA' : document.getElementById('filtro-kpi-equipo').value;
+        }
+
+        function valorKpi(def, dataset, equipo) {
+            if (!dataset || def.integracion) return null;
+            const e = datoEquipo(dataset, def.global ? 'PLANTA' : equipo);
+            const v = def.valor(e, dataset);
+            return num(v);
+        }
+
+        function metaKpi(def, equipo) {
+            const eq = def.global ? 'PLANTA' : equipo;
+            const guardada = cacheKpiMetas.find(m => m.kpi === def.id && m.equipo === eq);
+            if (guardada) return { valor: num(guardada.meta), sugerida: false, autor: guardada.propuesta_por, comentario: guardada.comentario };
+            if (def.metaSugerida != null) return { valor: def.metaSugerida, sugerida: true };
+            return null;
+        }
+
+        function deltaHtml(def, actual, anterior) {
+            if (actual === null || anterior === null) return '<span style="color: var(--text-muted);">Sin comparación con el período anterior</span>';
+            const diff = actual - anterior;
+            if (Math.abs(diff) < 1e-9) return '<span style="color: var(--text-muted);">= igual que el período anterior</span>';
+            const mejora = diff > 0;
+            const color = mejora ? 'var(--accent-teal)' : 'var(--danger)';
+            const flecha = mejora ? '▲' : '▼';
+            let texto;
+            if (def.tipo === 'pct') {
+                texto = `${diff > 0 ? '+' : ''}${(diff * 100).toFixed(1)} pp`;
+            } else if (anterior !== 0) {
+                texto = `${diff > 0 ? '+' : ''}${((diff / Math.abs(anterior)) * 100).toFixed(1)}%`;
+            } else {
+                texto = `${diff > 0 ? '+' : ''}${formatearKpi(def, diff)}`;
+            }
+            return `<span style="color: ${color};">${flecha} ${texto} vs período anterior</span>`;
+        }
+
+        function sparkline(valores, color) {
+            const pts = valores.map(num).filter(v => v !== null);
+            if (pts.length < 2) return '';
+            const w = 140, h = 32;
+            const min = Math.min(...pts), max = Math.max(...pts);
+            const rango = (max - min) || 1;
+            const coords = pts.map((v, i) => `${(i / (pts.length - 1) * w).toFixed(1)},${(h - 2 - ((v - min) / rango) * (h - 4)).toFixed(1)}`).join(' ');
+            return `<svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="margin-top: 6px;"><polyline points="${coords}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+        }
+
+        async function cargarIndicadoresData() {
+            const grid = document.getElementById('kpis-teal-grid');
+            grid.innerHTML = '<p style="color: var(--text-muted);">Calculando los 10 KPIs Teal (puede tardar unos segundos)...</p>';
+
+            const dias = parseInt(document.getElementById('filtro-kpi-periodo').value) || 30;
+            const hasta = new Date();
+            const desde = new Date();
+            desde.setDate(desde.getDate() - (dias - 1));
+            const hastaAnt = new Date(desde);
+            hastaAnt.setDate(hastaAnt.getDate() - 1);
+            const desdeAnt = new Date(hastaAnt);
+            desdeAnt.setDate(desdeAnt.getDate() - (dias - 1));
+
+            document.getElementById('kpi-info-periodo').innerText =
+                `Período: ${fechaAR(fechaLocalISO(desde))} → ${fechaAR(fechaLocalISO(hasta))}. Se compara contra ${fechaAR(fechaLocalISO(desdeAnt))} → ${fechaAR(fechaLocalISO(hastaAnt))}.`;
+
+            try {
+                const [resAct, resAnt, metas, cal, mant, dem] = await Promise.all([
+                    fetchRpc('fn_kpis_teal', { p_desde: fechaLocalISO(desde), p_hasta: fechaLocalISO(hasta) }),
+                    fetchRpc('fn_kpis_teal', { p_desde: fechaLocalISO(desdeAnt), p_hasta: fechaLocalISO(hastaAnt) }),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/kpi_metas?select=*`, { headers: SB_HEADERS }), 'kpi_metas'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }), 'vista_gestion_calidad_app'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }), 'registro_mejoras'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes')
+                ]);
+
+                if (!resAct.ok) throw new Error(`fn_kpis_teal → Status ${resAct.status}: ${await resAct.text()}`);
+
+                cacheKpisTeal.actual = await resAct.json();
+                cacheKpisTeal.anterior = resAnt.ok ? await resAnt.json() : null;
+                cacheKpiMetas = metas;
+                cacheCalidad = cal;
+                cacheMantenimiento = mant;
+                cacheDemandaOdoo = dem;
+
+                renderizarKpisTeal();
+                renderizarPulsoVivo();
+            } catch (err) {
+                console.error("Error al calcular KPIs Teal:", err);
+                grid.innerHTML = `<p style="color: var(--danger);">❌ Error al calcular los KPIs: ${err.message}</p>`;
+                renderizarPulsoVivo();
+            }
+        }
+
+        function renderizarKpisTeal() {
+            const grid = document.getElementById('kpis-teal-grid');
+            const act = cacheKpisTeal.actual;
+            if (!act) return;
+            const ant = cacheKpisTeal.anterior;
+            const equipo = document.getElementById('filtro-kpi-equipo').value;
+
+            modoProductividadKg = (datoEquipo(act, 'PLANTA')?.llenados_con_peso || 0) > 0;
+
+            grid.innerHTML = KPI_TEAL.map(def => tarjetaKpi(def, act, ant, equipo)).join('');
+        }
+
+        function tarjetaKpi(def, act, ant, equipoSel) {
+            if (def.integracion) {
+                const est = ESTADOS_DATO.integracion;
+                return `
+                    <div class="kpi-teal kpi-pendiente" onclick="verDetalleKpi('${def.id}')">
+                        <div class="kpi-teal-top">
+                            <span class="kpi-teal-num">${def.n}</span>
+                            <span class="chip-estado ${est.clase}">${est.texto}</span>
+                        </div>
+                        <div class="kpi-title" style="margin-top: 6px;">${def.icono} ${def.titulo}</div>
+                        <div class="kpi-teal-valor" style="color: var(--text-muted);">—</div>
+                        <div class="kpi-sub">${def.requiere}</div>
+                    </div>
+                `;
+            }
+
+            const equipo = def.global ? 'PLANTA' : equipoSel;
+            const e = datoEquipo(act, equipo);
+            const actual = valorKpi(def, act, equipo);
+            const anterior = valorKpi(def, ant, equipo);
+            const meta = metaKpi(def, equipo);
+            const est = ESTADOS_DATO[def.estado(e, act)] || ESTADOS_DATO.sin;
+
+            let colorValor = 'var(--text-main)';
+            let barra = '';
+            let lineaMeta = '<div class="kpi-sub">Sin meta definida · el equipo puede proponerla</div>';
+            if (meta && meta.valor) {
+                const avance = actual !== null ? actual / meta.valor : null;
+                colorValor = avance === null ? 'var(--text-muted)' : (avance >= 1 ? 'var(--accent-teal)' : (avance >= 0.85 ? 'var(--warning)' : 'var(--danger)'));
+                const ancho = avance === null ? 0 : Math.max(0, Math.min(100, avance * 100));
+                barra = `<div class="meta-barra"><div style="width: ${ancho}%; background: ${colorValor};"></div></div>`;
+                lineaMeta = `<div class="kpi-sub">🎯 Meta ${formatearKpi(def, meta.valor)} ${meta.sugerida ? '(sugerida)' : `(propuesta${meta.autor ? ' por ' + meta.autor : ''})`}</div>`;
+            } else if (actual === null) {
+                colorValor = 'var(--text-muted)';
+            }
+
+            const serieHtml = (def.serie && equipo === 'PLANTA' && Array.isArray(act.serie))
+                ? sparkline(act.serie.map(s => s[def.serie]), colorValor === 'var(--text-main)' ? 'var(--accent-teal)' : colorValor)
+                : '';
+
+            const etiquetaMirada = def.global && equipoSel !== 'PLANTA' ? '<span class="kpi-sub"> (planta)</span>' : '';
+
+            return `
+                <div class="kpi-teal" onclick="verDetalleKpi('${def.id}')" style="border-top: 3px solid ${colorValor === 'var(--text-main)' ? 'var(--border-color)' : colorValor};">
+                    <div class="kpi-teal-top">
+                        <span class="kpi-teal-num">${def.n}</span>
+                        <span class="chip-estado ${est.clase}">${est.texto}</span>
+                    </div>
+                    <div class="kpi-title" style="margin-top: 6px;">${def.icono} ${def.titulo}${etiquetaMirada}</div>
+                    <div>
+                        <span class="kpi-teal-valor" style="color: ${colorValor};">${formatearKpi(def, actual)}</span>
+                        <span class="kpi-teal-unidad">${unidadKpi(def)}</span>
+                    </div>
+                    <div class="kpi-teal-delta">${deltaHtml(def, actual, anterior)}</div>
+                    <div class="kpi-sub">${def.sub(e, act)}</div>
+                    ${serieHtml}
+                    ${barra}
+                    ${lineaMeta}
+                </div>
+            `;
+        }
+
+        function verDetalleKpi(id) {
+            const def = KPI_TEAL.find(k => k.id === id);
+            if (!def) return;
+
+            const act = cacheKpisTeal.actual;
+            const equipo = equipoMirada(def);
+            const etiquetaEquipo = equipo === 'PLANTA' ? 'Planta completa' : `Equipo ${equipo}`;
+
+            document.getElementById('modal-kpi-titulo').innerText = `${def.n}. ${def.icono} ${def.titulo}`;
+            document.getElementById('modal-kpi-fuente').innerText = def.integracion ? 'Pendiente de integración' : etiquetaEquipo;
+
+            let html = `
+                <p style="margin-top: 0;">${def.descripcion}</p>
+                <div class="bloque-detalle">
+                    <h4>🧮 Cómo se calcula</h4>
+                    <p style="margin: 0;">${def.formula}</p>
+                    <p style="margin: 8px 0 0; color: var(--text-muted);"><small>Fuente: ${def.fuente}</small></p>
+                </div>
+            `;
+
+            if (def.integracion || (def.requiere && ['dato', 'parcial'].includes(def.estado(datoEquipo(act, equipo), act)))) {
+                html += `
+                    <div class="bloque-detalle" style="border-color: var(--warning);">
+                        <h4 style="color: var(--warning);">🛠️ Qué falta para tenerlo completo</h4>
+                        <p style="margin: 0;">${def.requiere}</p>
+                    </div>
+                `;
+            }
+
+            if (!def.integracion && act) {
+                // Desglose por equipo (cada equipo contra sí mismo, sin ranking)
+                if (def.columnas) {
+                    const filas = (act.equipos || []).filter(e => e.equipo !== 'PLANTA');
+                    const planta = datoEquipo(act, 'PLANTA');
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>👥 Por equipo</h4>
+                            <div style="overflow-x: auto;">
+                                <table class="table-teal">
+                                    <thead>
+                                        <tr><th>Equipo</th>${def.columnas.map(c => `<th>${c[0]}</th>`).join('')}</tr>
+                                    </thead>
+                                    <tbody>
+                                        ${filas.map(e => `<tr${e.equipo === equipo ? ' style="background: rgba(16,185,129,0.08);"' : ''}><td><strong>${e.equipo}</strong></td>${def.columnas.map(c => `<td>${c[1](e)}</td>`).join('')}</tr>`).join('')}
+                                        ${planta ? `<tr style="border-top: 2px solid var(--accent-teal);"><td><strong>🏭 PLANTA</strong></td>${def.columnas.map(c => `<td>${c[1](planta)}</td>`).join('')}</tr>` : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                            ${def.id === 'oee' ? '<p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">* Sin inspecciones de desmolde asignables al equipo: se usa la calidad de planta.</small></p>' : ''}
+                        </div>
+                    `;
                 }
 
-                const totalMoldes = cacheEficienciaMoldes.length || 1;
-                const moldesEnProduccion = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'ARMANDO' || m.estado_flujo === 'POR LLENAR' || m.estado_flujo === 'FINALIZADO').length;
-                const disponibilidadPct = ((moldesEnProduccion / totalMoldes) * 100).toFixed(1);
-                document.getElementById('kpi-ind-disponibilidad').innerText = `${disponibilidadPct}%`;
+                // Pareto de defectos
+                if (def.id === 'fpy' && Array.isArray(act.pareto_defectos)) {
+                    const maxDef = Math.max(1, ...act.pareto_defectos.map(p => num(p.cantidad) || 0));
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>📊 Pareto de defectos (planta)</h4>
+                            ${act.pareto_defectos.map(p => `
+                                <div style="display: grid; grid-template-columns: 170px 1fr 40px; gap: 8px; align-items: center; margin: 4px 0;">
+                                    <span>${p.defecto}</span>
+                                    <div class="barra-pareto" style="width: ${((num(p.cantidad) || 0) / maxDef) * 100}%;"></div>
+                                    <strong>${p.cantidad}</strong>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
 
-                const alertasCriticas = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO').length;
-                document.getElementById('kpi-ind-alertas-rfid').innerText = alertasCriticas;
+                // Moldes ociosos
+                if (def.id === 'giros') {
+                    const ociosos = (act.moldes_ociosos || []).filter(m => equipo === 'PLANTA' || m.equipo === equipo);
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>😴 Moldes activos sin llenados en el período (${ociosos.length})</h4>
+                            ${ociosos.length === 0
+                                ? '<p style="margin: 0; color: var(--accent-teal);">Todos los moldes activos tuvieron al menos un llenado. 👏</p>'
+                                : `<div style="max-height: 220px; overflow-y: auto;">
+                                    <table class="table-teal">
+                                        <thead><tr><th>N°</th><th>Molde</th><th>Equipo</th><th>Tag</th></tr></thead>
+                                        <tbody>${ociosos.map(m => `<tr><td>#${m.n_molde ?? '--'}</td><td>${m.nombre}</td><td>${m.equipo}</td><td><code>${m.id_tag}</code></td></tr>`).join('')}</tbody>
+                                    </table>
+                                  </div>
+                                  <p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">¿Siguen siendo necesarios? Desactivarlos (Estado = NO) libera capital y espacio.</small></p>`}
+                        </div>
+                    `;
+                }
 
-                const totalPiezasPendientes = cacheDemandaOdoo.reduce((acc, curr) => acc + (parseInt(curr.cant_pendiente) || 0), 0);
-                document.getElementById('kpi-ind-backlog').innerText = `${totalPiezasPendientes} pzas`;
+                // Componentes de velocidad
+                if (def.id === 'velocidad' && act.velocidad) {
+                    const v = act.velocidad;
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>🔧 Componentes</h4>
+                            <table class="table-teal">
+                                <tbody>
+                                    <tr><td>% cerrados en menos de 48 h</td><td><strong>${fmtPct(v.pct_48h)}</strong></td></tr>
+                                    <tr><td>MTTR Mantenimiento</td><td>${fmtHoras(v.mttr_mant_h)}</td></tr>
+                                    <tr><td>MTTR Calidad</td><td>${fmtHoras(v.mttr_cal_h)}</td></tr>
+                                    <tr><td>Tiempo promedio hasta tomar el caso</td><td>${fmtHoras(v.toma_prom_h)}</td></tr>
+                                    <tr><td>Casos reportados en el período</td><td>${v.reportados}</td></tr>
+                                    <tr><td>Casos cerrados en el período</td><td>${v.cerrados}</td></tr>
+                                    <tr><td>Casos abiertos hoy</td><td>${v.abiertos_hoy}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
 
-                const llenadosHoy = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO').length;
-                document.getElementById('kpi-ind-llenados').innerText = llenadosHoy;
+                // Componentes del Pulso Teal
+                if (def.id === 'pulso' && act.pulso) {
+                    const p = act.pulso;
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>🌱 Componentes del Pulso</h4>
+                            <table class="table-teal">
+                                <tbody>
+                                    <tr><td>🙋 Participación (personas que reportaron / activas)</td><td><strong>${fmtPct(p.participacion)}</strong> <small>(${p.personas_que_reportaron}/${p.personas_activas})</small></td></tr>
+                                    <tr><td>🤝 Toma rápida (casos tomados en menos de 24 h)</td><td><strong>${fmtPct(p.toma_rapida)}</strong></td></tr>
+                                    <tr><td>🏠 Presencia (persona-días fichados / esperados)</td><td><strong>${fmtPct(p.presencia)}</strong> <small>(${p.persona_dias} persona-días)</small></td></tr>
+                                    <tr><td>❤️ Cuidado (plantel fuera de ART o enfermedad)</td><td><strong>${fmtPct(p.cuidado)}</strong> <small>(${p.en_salud} de ${p.plantel})</small></td></tr>
+                                </tbody>
+                            </table>
+                            <p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">Si baja la participación, el problema es cultural, no de producción: ningún tablero de planta lo detectaría.</small></p>
+                        </div>
+                    `;
+                }
 
-                const calAbiertas = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
-                document.getElementById('kpi-ind-cal-abiertos').innerText = calAbiertas;
+                // Evolución diaria
+                if (def.serie && Array.isArray(act.serie) && act.serie.length) {
+                    const ultimos = act.serie.slice(-14).reverse();
+                    html += `
+                        <div class="bloque-detalle">
+                            <h4>📈 Evolución diaria (planta, últimos ${ultimos.length} días con datos)</h4>
+                            <div style="max-height: 220px; overflow-y: auto;">
+                                <table class="table-teal">
+                                    <thead><tr><th>Fecha</th><th>${def.titulo}</th></tr></thead>
+                                    <tbody>${ultimos.map(s => `<tr><td>${diaSemana(s.fecha)} ${fechaAR(s.fecha)}</td><td>${formatearKpi(def, num(s[def.serie]))}</td></tr>`).join('')}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
 
-                const casosCerradosCalidad = cacheCalidad.filter(c => (c.estado === 'Resuelto' || c.estado === 'Cerrado') && c.fecha_reporte && c.fecha_resolucion);
-                let sumaHorasCal = 0;
-                casosCerradosCalidad.forEach(c => {
-                    const diff = (new Date(c.fecha_resolucion) - new Date(c.fecha_reporte)) / (1000 * 60 * 60);
-                    if (diff > 0) sumaHorasCal += diff;
+                // Meta propuesta por el equipo
+                const meta = metaKpi(def, equipo);
+                const valorInput = meta && meta.valor != null
+                    ? (def.tipo === 'pct' ? (meta.valor * 100).toFixed(1) : meta.valor)
+                    : '';
+                html += `
+                    <div class="bloque-detalle" style="border-color: var(--accent-teal);">
+                        <h4>🎯 Meta de ${etiquetaEquipo}</h4>
+                        <p style="margin: 0 0 8px; color: var(--text-muted);"><small>En una organización Teal la meta la propone el propio equipo. ${meta && !meta.sugerida ? `Meta actual propuesta${meta.autor ? ' por ' + meta.autor : ''}${meta.comentario ? ': "' + meta.comentario + '"' : ''}.` : 'Todavía no hay meta propuesta.'}</small></p>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                            <input type="number" id="meta-valor" step="0.1" style="width: 120px;" placeholder="${def.tipo === 'pct' ? 'Ej: 85' : 'Valor'}" value="${valorInput}">
+                            <span style="color: var(--text-muted);">${def.tipo === 'pct' ? '%' : unidadKpi(def)}</span>
+                            <input type="text" id="meta-autor" style="flex: 1; min-width: 160px;" placeholder="Propuesta por (equipo o persona)" value="${meta && !meta.sugerida && meta.autor ? meta.autor : ''}">
+                            <input type="text" id="meta-comentario" style="flex: 2; min-width: 200px;" placeholder="¿Por qué esta meta?" value="${meta && !meta.sugerida && meta.comentario ? meta.comentario : ''}">
+                            <button class="btn" onclick="guardarMetaKpi('${def.id}')">Guardar meta</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('modal-kpi-body').innerHTML = html;
+            document.getElementById('modal-kpi-origen').style.display = 'flex';
+        }
+
+        async function guardarMetaKpi(id) {
+            const def = KPI_TEAL.find(k => k.id === id);
+            if (!def) return;
+
+            const equipo = equipoMirada(def);
+            let valor = parseFloat(String(document.getElementById('meta-valor').value).replace(',', '.'));
+            if (isNaN(valor)) {
+                alert('Ingresá un valor numérico para la meta.');
+                return;
+            }
+            if (def.tipo === 'pct') valor = valor / 100;
+
+            const registro = {
+                kpi: def.id,
+                equipo: equipo,
+                meta: valor,
+                propuesta_por: document.getElementById('meta-autor').value.trim() || null,
+                comentario: document.getElementById('meta-comentario').value.trim() || null,
+                updated_at: new Date().toISOString()
+            };
+
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/kpi_metas?on_conflict=kpi,equipo`, {
+                    method: 'POST',
+                    headers: {
+                        ...SB_HEADERS,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'resolution=merge-duplicates,return=minimal'
+                    },
+                    body: JSON.stringify([registro])
                 });
-                const mttrCalidad = casosCerradosCalidad.length > 0 ? (sumaHorasCal / casosCerradosCalidad.length).toFixed(1) : "0.0";
-                document.getElementById('kpi-ind-mttr-calidad').innerText = `${mttrCalidad}h`;
 
-                const mantAbiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
-                document.getElementById('kpi-ind-mant-abiertas').innerText = mantAbiertas;
+                if (!res.ok) {
+                    alert(`❌ No se pudo guardar la meta (Status ${res.status}).\n${await res.text()}`);
+                    return;
+                }
 
-                const opsAuditados = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0).length;
-                document.getElementById('kpi-ind-ops-auditados').innerText = `${opsAuditados} / ${cacheRankingBienestar.length}`;
+                cacheKpiMetas = await jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/kpi_metas?select=*`, { headers: SB_HEADERS }), 'kpi_metas');
+                renderizarKpisTeal();
+                cerrarModalKpiOrigen();
+                alert(`✅ Meta de ${def.titulo} guardada para ${equipo === 'PLANTA' ? 'la planta' : 'el equipo ' + equipo}.`);
+            } catch (err) {
+                console.error('Error guardando meta:', err);
+                alert('❌ Error de conexión al guardar la meta.');
+            }
+        }
 
-                const opsConAud = cacheRankingBienestar.filter(o => parseInt(o.total_auditorias) > 0);
-                const sumaTeal = opsConAud.reduce((acc, curr) => acc + parseFloat(curr.cumplimiento_promedio_pct || 0), 0);
-                const tealIndex = opsConAud.length > 0 ? (sumaTeal / opsConAud.length).toFixed(1) : "0.0";
-                document.getElementById('kpi-ind-salud-teal').innerText = `${tealIndex}%`;
+        // Contadores operativos en vivo (lo pendiente hoy)
+        function renderizarPulsoVivo() {
+            const totalPiezasPendientes = cacheDemandaOdoo.reduce((acc, curr) => acc + (parseInt(curr.cant_pendiente) || 0), 0);
+            document.getElementById('kpi-ind-backlog').innerText = `${totalPiezasPendientes} pzas`;
 
-                const despachosPendientes = cacheDemandaOdoo.filter(d => (parseInt(d.cant_pendiente) || 0) > 0).length;
-                document.getElementById('kpi-ind-despachos').innerText = `${despachosPendientes} SO`;
+            const despachosPendientes = cacheDemandaOdoo.filter(d => (parseInt(d.cant_pendiente) || 0) > 0).length;
+            document.getElementById('kpi-ind-despachos').innerText = `${despachosPendientes} SO`;
 
-            } catch (err) { console.error("Error al consolidar Indicadores Realtime:", err); }
+            const calAbiertas = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso).length;
+            document.getElementById('kpi-ind-cal-abiertos').innerText = calAbiertas;
+
+            const mantAbiertas = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma).length;
+            document.getElementById('kpi-ind-mant-abiertas').innerText = mantAbiertas;
         }
 
         function mostrarOrigenKpi(tipo) {
@@ -2634,46 +3272,7 @@
 
             let htmlTabla = '';
 
-            if (tipo === 'disponibilidad' || tipo === 'llenados' || tipo === 'alertas-rfid') {
-                fuenteEl.innerText = "vista: reporte_eficiencia_moldes";
-                let datos = cacheEficienciaMoldes;
-
-                if (tipo === 'llenados') {
-                    tituloEl.innerText = "Moldes Llenados Hoy (FINALIZADOS)";
-                    datos = cacheEficienciaMoldes.filter(m => m.estado_flujo === 'FINALIZADO');
-                } else if (tipo === 'alertas-rfid') {
-                    tituloEl.innerText = "Alertas Críticas de Productividad RFID";
-                    datos = cacheEficienciaMoldes.filter(m => m.alerta_productividad === '🚨 CRITICO');
-                } else {
-                    tituloEl.innerText = "Matriz Completa de Disponibilidad de Moldes";
-                }
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Molde #</th>
-                                <th>Producto</th>
-                                <th>Equipo</th>
-                                <th>Estado Flujo</th>
-                                <th>Alerta</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${datos.map(m => `
-                                <tr>
-                                    <td><strong>#${m.n_molde}</strong></td>
-                                    <td>${m.producto}</td>
-                                    <td>${m.equipo_planificacion || 'General'}</td>
-                                    <td>${m.estado_flujo}</td>
-                                    <td>${m.alerta_productividad}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            } 
-            else if (tipo === 'backlog' || tipo === 'despachos') {
+            if (tipo === 'backlog' || tipo === 'despachos') {
                 fuenteEl.innerText = "tabla: ordenes_trabajo_pendientes (Odoo Sync)";
                 tituloEl.innerText = tipo === 'backlog' ? "Backlog Detallado de Piezas Pendientes" : "Órdenes de Venta (SO) Pendientes de Despacho";
 
@@ -2702,17 +3301,10 @@
                     </table>
                 `;
             }
-            else if (tipo === 'cal-abiertos' || tipo === 'mttr-calidad') {
+            else if (tipo === 'cal-abiertos') {
                 fuenteEl.innerText = "vista: vista_gestion_calidad_app";
-                let datos = cacheCalidad;
-
-                if (tipo === 'cal-abiertos') {
-                    tituloEl.innerText = "Incidencias de Calidad Abiertas (Sin Tomar)";
-                    datos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso);
-                } else {
-                    tituloEl.innerText = "Casos Cerrados para Cálculo de MTTR Calidad";
-                    datos = cacheCalidad.filter(c => c.estado === 'Resuelto' || c.estado === 'Cerrado');
-                }
+                tituloEl.innerText = "Incidencias de Calidad Abiertas (Sin Tomar)";
+                const datos = cacheCalidad.filter(c => (c.estado === 'Abierto' || !c.estado) && !c.fecha_toma_caso);
 
                 htmlTabla = `
                     <table class="table-teal">
@@ -2732,7 +3324,7 @@
                                     <td>${c.auditor}</td>
                                     <td>${c.descripcion_problema}</td>
                                     <td>${c.responsable_calidad || 'Sin Asignar'}</td>
-                                    <td><span class="badge ${c.estado === 'Resuelto' ? 'badge-success' : 'badge-danger'}">${c.estado || 'Abierto'}</span></td>
+                                    <td><span class="badge badge-danger">${c.estado || 'Abierto'}</span></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -2741,7 +3333,7 @@
             }
             else if (tipo === 'mant-abiertas') {
                 fuenteEl.innerText = "tabla: registro_mejoras";
-                tituloEl.innerText = "Órdenes de Mantenimiento Pendientes";
+                tituloEl.innerText = "Órdenes de Mantenimiento Pendientes (Sin Tomar)";
                 const datos = cacheMantenimiento.filter(m => (m.estado === 'Abierta' || m.estado === 'Abierto' || !m.estado) && !m.fecha_toma);
 
                 htmlTabla = `
@@ -2763,35 +3355,6 @@
                                     <td>${m.descripcion}</td>
                                     <td>${m.area || 'Planta'}</td>
                                     <td><span class="badge badge-warning">${m.urgencia || 'Normal'}</span></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-            else if (tipo === 'ops-auditados' || tipo === 'salud-teal') {
-                fuenteEl.innerText = "vista: ranking_operarios_inteligente";
-                tituloEl.innerText = tipo === 'ops-auditados' ? "Cobertura de Operarios Auditados" : "Índice de Salud Organizacional Teal por Operario";
-
-                htmlTabla = `
-                    <table class="table-teal">
-                        <thead>
-                            <tr>
-                                <th>Ranking</th>
-                                <th>Operario</th>
-                                <th>Equipo</th>
-                                <th>Promedio</th>
-                                <th>Auditorías</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${cacheRankingBienestar.map(o => `
-                                <tr>
-                                    <td>#${o.posicion_ranking}</td>
-                                    <td><strong>${o.Operario}</strong></td>
-                                    <td>${o.Equipos || 'General'}</td>
-                                    <td style="color: var(--accent-teal); font-weight:700;">${o.cumplimiento_promedio_pct}%</td>
-                                    <td>${o.total_auditorias} reg.</td>
                                 </tr>
                             `).join('')}
                         </tbody>
