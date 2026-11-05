@@ -264,6 +264,7 @@
             font-style: italic;
         }
 
+        /* MODALES Y BOTÓN DE CIERRE (CRUZ) */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
@@ -275,6 +276,7 @@
             z-index: 999;
         }
         .modal-box {
+            position: relative;
             background: var(--panel-bg);
             border: 1px solid var(--accent-teal);
             border-radius: 12px;
@@ -285,6 +287,25 @@
             max-height: 85vh;
             overflow-y: auto;
         }
+        .btn-close-modal {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: color 0.2s ease, transform 0.2s ease;
+            line-height: 1;
+            padding: 4px;
+        }
+        .btn-close-modal:hover {
+            color: var(--danger);
+            transform: scale(1.15);
+        }
+
         .img-preview-modal {
             width: 100%;
             max-height: 320px;
@@ -330,7 +351,7 @@
             position: absolute;
             left: -26px;
             top: 4px;
-            width: 100px;
+            width: 10px;
             height: 10px;
             border-radius: 50%;
             background: var(--text-muted);
@@ -483,20 +504,14 @@
             <div id="calidad-list" class="grid-cards" style="display: none;">Cargando registros de calidad...</div>
         </div>
 
-        <!-- 3. SOLAPA PROCESOS & TIEMPOS (NUEVO MÓDULO DRILL-DOWN TEAL) -->
+        <!-- 3. SOLAPA PROCESOS & TIEMPOS -->
         <div id="sec-procesos-tiempos" style="display: none;">
-            <!-- BREADCRUMB DE NAVEGACIÓN -->
             <div class="breadcrumb" id="proc-breadcrumb">
                 <span class="breadcrumb-item" onclick="navegarProcesos('EQUIPOS')">🏭 Planta General</span>
             </div>
 
-            <!-- VISTA NIVEL 1: EQUIPOS -->
             <div id="view-proc-equipos" class="grid-cards">Cargando tiempos e indicadores por equipo...</div>
-
-            <!-- VISTA NIVEL 2: FAMILIAS -->
             <div id="view-proc-familias" class="grid-cards" style="display: none;"></div>
-
-            <!-- VISTA NIVEL 3: TIEMPOS POR MOLDE (TEÓRICO VS REAL) -->
             <div id="view-proc-moldes" style="display: none;"></div>
         </div>
 
@@ -629,7 +644,8 @@
     <!-- MODAL DESMOLDE -->
     <div id="modal-desmolde" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <button class="btn-close-modal" onclick="cerrarModalDesmolde()" title="Cerrar ventana">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-right: 30px;">
                 <h3 id="modal-desmolde-titulo" style="margin: 0; color: var(--accent-teal);">Detalle del Molde</h3>
                 <span class="badge" id="modal-desmolde-badge">CRITICIDAD</span>
             </div>
@@ -643,7 +659,8 @@
     <!-- MODAL ORIGEN DE DATOS KPI -->
     <div id="modal-kpi-origen" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <button class="btn-close-modal" onclick="cerrarModalKpiOrigen()" title="Cerrar ventana">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-right: 30px;">
                 <h3 id="modal-kpi-titulo" style="margin: 0; color: var(--accent-teal);">Origen del KPI</h3>
                 <span class="badge badge-info" id="modal-kpi-fuente">Fuente</span>
             </div>
@@ -657,7 +674,8 @@
     <!-- MODAL DETALLE GENÉRICO -->
     <div id="modal-detalle" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <button class="btn-close-modal" onclick="cerrarModalDetalle()" title="Cerrar ventana">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-right: 30px;">
                 <h3 id="modal-det-titulo" style="margin: 0; color: var(--accent-teal);">Detalle del Caso</h3>
                 <span class="badge" id="modal-det-badge">ESTADO</span>
             </div>
@@ -671,7 +689,8 @@
     <!-- MODAL TRAZA MOLDE RFID -->
     <div id="modal-molde" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <button class="btn-close-modal" onclick="cerrarModalMolde()" title="Cerrar ventana">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-right: 30px;">
                 <h3 id="modal-molde-titulo" style="margin: 0; color: var(--accent-teal);">Molde #</h3>
                 <span class="badge" id="modal-molde-estado">ESTADO</span>
             </div>
@@ -685,7 +704,8 @@
     <!-- MODAL OPERARIO BIENESTAR -->
     <div id="modal-operario" class="modal-overlay" style="display: none;">
         <div class="modal-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <button class="btn-close-modal" onclick="cerrarModalOperario()" title="Cerrar ventana">✕</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-right: 30px;">
                 <h3 id="modal-op-nombre" style="margin: 0; color: var(--accent-teal);">Operario</h3>
                 <span class="badge" id="modal-op-posicion">#0</span>
             </div>
@@ -715,11 +735,17 @@
         let filtroCalidadKpiActivo = null;
         let filtroMantKpiActivo = null;
 
-        // Estado del Módulo Procesos & Tiempos
         let navProcesosEstado = {
-            nivel: 'EQUIPOS', // 'EQUIPOS', 'FAMILIAS', 'MOLDES'
+            nivel: 'EQUIPOS',
             equipoSeleccionado: null,
             familiaSeleccionada: null
+        };
+
+        /* MANEJADOR GLOBAL: CIERRE AL HACER CLIC FUERA DE LA VENTANA MODAL */
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                event.target.style.display = 'none';
+            }
         };
 
         function toggleSubmenuCalidad() {
@@ -1301,7 +1327,7 @@
             document.getElementById('modal-detalle').style.display = 'flex';
         }
 
-        /* 3. MÓDULO PROCESOS & TIEMPOS (NUEVA LÓGICA DRILL-DOWN DE DESVÍOS HISTÓRICOS) */
+        /* 3. PROCESOS & TIEMPOS */
         async function cargarProcesosYTiemposData() {
             try {
                 const [resEf, resDesvios, resMoldes] = await Promise.all([
@@ -1348,7 +1374,6 @@
             else if (nivel === 'MOLDES') renderizarNivelMoldes(navProcesosEstado.equipoSeleccionado, navProcesosEstado.familiaSeleccionada);
         }
 
-        // NIVEL 1: EQUIPOS DE PLANTA
         function renderizarNivelEquipos() {
             const container = document.getElementById('view-proc-equipos');
             container.style.display = 'grid';
@@ -1391,7 +1416,6 @@
             }).join('');
         }
 
-        // NIVEL 2: FAMILIAS POR EQUIPO
         function renderizarNivelFamilias(equipo) {
             const container = document.getElementById('view-proc-familias');
             container.style.display = 'grid';
@@ -1435,7 +1459,6 @@
             }).join('');
         }
 
-        // NIVEL 3: DETALLE POR MOLDE (TEÓRICO VS REAL)
         function renderizarNivelMoldes(equipo, familia) {
             const container = document.getElementById('view-proc-moldes');
             container.style.display = 'block';
@@ -2055,7 +2078,7 @@
             document.getElementById('modal-kpi-origen').style.display = 'none';
         }
 
-        // Carga inicial al iniciar la app
+        // Carga inicial
         cargarPlanificacionData();
     </script>
 </body>
