@@ -245,6 +245,7 @@
         }
         .btn-danger { background-color: var(--danger); color: white; }
         .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: wait; }
 
         .action-buttons-rfid {
             display: flex;
@@ -346,6 +347,12 @@
         }
         .table-teal tr:nth-child(even) {
             background-color: rgba(255, 255, 255, 0.02);
+        }
+        .table-teal tr.fila-interactiva {
+            cursor: pointer;
+        }
+        .table-teal tr.fila-interactiva:hover {
+            background-color: rgba(16, 185, 129, 0.08);
         }
 
         .timeline {
@@ -757,6 +764,9 @@
         // Tolerancia para considerar un ciclo "fuera de tiempo" (% sobre el objetivo)
         const TOLERANCIA_DESVIO_PCT = 10;
 
+        // Marca que identifica en lecturas_rfid las etapas cargadas a mano desde la app
+        const ORIGEN_OVERRIDE = 'OVERRIDE_MANUAL_APP';
+
         let cacheCalidad = [];
         let cacheDesmoldeProcesado = [];
         let cacheMantenimiento = [];
@@ -765,6 +775,13 @@
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
         let cacheTiemposMoldes = [];
+
+        // etapa -> zona (desde config_zonas_rfid) para grabar los overrides manuales
+        let cacheZonasPorEtapa = {};
+        // promedio real 30 días por molde (desde fn_tiempos_moldes), clave n_molde o id_tag
+        let cachePromediosMoldes = new Map();
+        // rango usado en la última carga de Procesos & Tiempos
+        let rangoProcesos = { desde: null, hasta: null };
 
         let filtroEstadoKpiActivo = null;
         let filtroCalidadKpiActivo = null;
@@ -794,6 +811,21 @@
             return `${y}-${m}-${dd}`;
         }
 
+        // Fecha y hora local "YYYY-MM-DD HH:MM:SS" (mismo formato que se castea a timestamp en Supabase)
+        function fechaHoraLocal(d = new Date()) {
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mi = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${fechaLocalISO(d)} ${hh}:${mi}:${ss}`;
+        }
+
+        // "2026-11-05T08:12:33" -> "08:12"
+        function horaCorta(ts) {
+            if (!ts) return '--:--';
+            const s = String(ts).replace('T', ' ');
+            return s.length >= 16 ? s.substring(11, 16) : s;
+        }
+
         function num(v) {
             const n = parseFloat(v);
             return isNaN(n) ? null : n;
@@ -808,6 +840,30 @@
             const n = num(v);
             if (n === null) return '--';
             return `${n > 0 ? '+' : ''}${n.toFixed(1)} min`;
+        }
+
+        // Devuelve [] si la respuesta falla, para que un endpoint caído no rompa toda la pantalla
+        async function jsonSeguro(promesaFetch, etiqueta) {
+            try {
+                const res = await promesaFetch;
+                if (!res.ok) {
+                    console.warn(`${etiqueta}: Status ${res.status}`, await res.text());
+                    return [];
+                }
+                const data = await res.json();
+                return Array.isArray(data) ? data : [];
+            } catch (e) {
+                console.warn(`${etiqueta}: error de conexión`, e);
+                return [];
+            }
+        }
+
+        function fetchRpc(nombre, params) {
+            return fetch(`${SUPABASE_URL}/rest/v1/rpc/${nombre}`, {
+                method: 'POST',
+                headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
         }
 
         // Normaliza nombres para deduplicar: sin tildes, minúsculas, espacios simples y palabras ordenadas
@@ -934,7 +990,7 @@
             return `${mins} min`;
         }
 
-        /* 1. PLANIFICACIÓN CON FILTRO DE RANGO Y SOBREESCRITURA MANUAL */
+        /* 1. PLANIFICACIÓN CON FILTRO DE RANGO, TIEMPOS REALES Y SOBREESCRITURA MANUAL */
         async function cargarPlanificacionData() {
             try {
                 const fInicio = document.getElementById('filtro-plan-inicio').value;
@@ -949,18 +1005,34 @@
                     urlEficiencia += `&hora_llenado=lte.${fFin}T23:59:59`;
                 }
 
-                const [resEficiencia, resDemanda, resMoldes] = await Promise.all([
-                    fetch(urlEficiencia, { headers: SB_HEADERS }),
-                    fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }),
-                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: SB_HEADERS })
+                const d30 = new Date();
+                d30.setDate(d30.getDate() - 30);
+
+                const [ef, dem, mol, zonas, promedios] = await Promise.all([
+                    jsonSeguro(fetch(urlEficiencia, { headers: SB_HEADERS }), 'reporte_eficiencia_moldes'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: SB_HEADERS }), 'planificacion_moldes'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/config_zonas_rfid?select=zona,etapa`, { headers: SB_HEADERS }), 'config_zonas_rfid'),
+                    jsonSeguro(fetchRpc('fn_tiempos_moldes', { p_desde: fechaLocalISO(d30), p_hasta: fechaLocalISO(), p_tolerancia_pct: TOLERANCIA_DESVIO_PCT }), 'fn_tiempos_moldes')
                 ]);
 
-                const ef = await resEficiencia.json();
-                const dem = await resDemanda.json();
-                const mol = await resMoldes.json();
-                cacheEficienciaMoldes = Array.isArray(ef) ? ef : [];
-                cacheDemandaOdoo = Array.isArray(dem) ? dem : [];
-                cacheMoldesPlanificacion = Array.isArray(mol) ? mol : [];
+                cacheEficienciaMoldes = ef;
+                cacheDemandaOdoo = dem;
+                cacheMoldesPlanificacion = mol;
+
+                // etapa -> primera zona configurada (se prefieren las zonas reales de antena)
+                cacheZonasPorEtapa = {};
+                zonas
+                    .filter(z => z.etapa && z.zona)
+                    .sort((a, b) => (a.zona.toUpperCase().startsWith('MANUAL') ? 1 : 0) - (b.zona.toUpperCase().startsWith('MANUAL') ? 1 : 0))
+                    .forEach(z => { if (!cacheZonasPorEtapa[z.etapa]) cacheZonasPorEtapa[z.etapa] = z.zona; });
+
+                // promedios reales 30 días por molde
+                cachePromediosMoldes = new Map();
+                promedios.forEach(p => {
+                    if (p.n_molde) cachePromediosMoldes.set(`N:${String(p.n_molde).trim()}`, p);
+                    if (p.id_tag) cachePromediosMoldes.set(`T:${String(p.id_tag).trim().toUpperCase()}`, p);
+                });
 
                 actualizarKpisMoldes(cacheEficienciaMoldes);
                 filtrarPlanificacion();
@@ -969,6 +1041,14 @@
             } catch (e) { 
                 console.error("Error al cargar datos de planificación", e);
             }
+        }
+
+        function obtenerPromedioMolde(item) {
+            if (item.id_tag) {
+                const porTag = cachePromediosMoldes.get(`T:${String(item.id_tag).trim().toUpperCase()}`);
+                if (porTag) return porTag;
+            }
+            return cachePromediosMoldes.get(`N:${String(item.n_molde ?? '').trim()}`) || null;
         }
 
         function toggleVistaPlanificacion() {
@@ -1030,9 +1110,23 @@
                 else if (item.alerta_productividad === '⚠️ CON DESVIO') badgeAlerta = `<span class="badge badge-warning">⚠️ CON DESVÍO</span>`;
                 else if (item.alerta_productividad === '✅ EN TIEMPO') badgeAlerta = `<span class="badge badge-success">✅ EN TIEMPO</span>`;
 
-                const horaDes = item.hora_desarmado ? item.hora_desarmado.substring(11, 16) : '--:--';
-                const horaArm = item.hora_armado ? item.hora_armado.substring(11, 16) : '--:--';
-                const horaLle = item.hora_llenado ? item.hora_llenado.substring(11, 16) : '--:--';
+                const horaDes = horaCorta(item.hora_desarmado);
+                const horaArm = horaCorta(item.hora_armado);
+                const horaLle = horaCorta(item.hora_llenado);
+
+                // Promedio real 30 días calculado desde lecturas_rfid
+                const prom = obtenerPromedioMolde(item);
+                let lineaPromedio = `<p><small style="color: var(--text-muted);">📈 <strong>Prom. real 30d:</strong> sin ciclos medidos</small></p>`;
+                if (prom) {
+                    const desv = num(prom.desvio_prom_min);
+                    const colorDesv = desv === null ? 'var(--text-muted)' : (desv > 0 ? 'var(--warning)' : 'var(--accent-teal)');
+                    lineaPromedio = `
+                        <p><small>📈 <strong>Prom. real 30d:</strong> ${fmtMin(prom.tiempo_real_prom_min)}
+                        <span style="color: ${colorDesv};">(${fmtDesvio(prom.desvio_prom_min)})</span>
+                        · ${prom.ciclos_medidos} ciclos</small></p>`;
+                }
+
+                const argsMolde = `'${argJs(item.n_molde)}', '${argJs(item.producto)}', '${argJs(item.id_tag || '')}'`;
 
                 return `
                     <div class="card" style="border-left: 4px solid ${borderColor};">
@@ -1042,7 +1136,8 @@
                         </div>
                         <p style="font-size: 0.9rem; font-weight: 600; margin: 4px 0;">${item.producto}</p>
                         <p><small>👥 <strong>Equipo:</strong> ${item.equipo_planificacion || 'Sin Asignar'}</small></p>
-                        <p><small>⏱️ <strong>Obj:</strong> ${item.tiempo_objetivo_min} min | <strong>Real:</strong> ${item.tiempo_real_min ? item.tiempo_real_min + ' min' : 'En proceso'}</small></p>
+                        <p><small>⏱️ <strong>Obj:</strong> ${item.tiempo_objetivo_min ?? '--'} min | <strong>Real hoy:</strong> ${item.tiempo_real_min ? item.tiempo_real_min + ' min' : 'En proceso'}</small></p>
+                        ${lineaPromedio}
                         
                         <div style="font-size: 0.8rem; background: var(--bg-dark); padding: 8px; border-radius: 6px; margin: 8px 0; display: flex; justify-content: space-between;">
                             <span>🔓 Des: <strong>${horaDes}</strong></span>
@@ -1055,22 +1150,63 @@
                             <small style="color: var(--text-muted); cursor:pointer;" onclick="verTrazaMolde('${argJs(item.n_molde)}', '${argJs(item.producto)}')">Ver Traza ➔</small>
                         </div>
 
-                        <!-- TRES BOTONES DE REGISTRO MANUAL DE ETAPAS (SOBREESCRITURA RFID) -->
+                        <!-- TRES BOTONES DE REGISTRO MANUAL (GRABAN EN lecturas_rfid) -->
                         <div class="action-buttons-rfid">
-                            <button class="btn btn-sm" style="background-color: var(--blue-info); color:white; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'DESARMADO')">🔓 Desarmar</button>
-                            <button class="btn btn-sm" style="background-color: var(--warning); color:black; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'ARMADO')">🔒 Armar</button>
-                            <button class="btn btn-sm" style="background-color: var(--accent-teal); color:black; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'LLENADO')">🧱 Llenar</button>
+                            <button class="btn btn-sm" style="background-color: var(--blue-info); color:white; flex:1;" onclick="registrarEtapaManual(${argsMolde}, 'DESARMADO', this)">🔓 Desarmar</button>
+                            <button class="btn btn-sm" style="background-color: var(--warning); color:black; flex:1;" onclick="registrarEtapaManual(${argsMolde}, 'ARMADO', this)">🔒 Armar</button>
+                            <button class="btn btn-sm" style="background-color: var(--accent-teal); color:black; flex:1;" onclick="registrarEtapaManual(${argsMolde}, 'LLENADO', this)">🧱 Llenar</button>
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        async function registrarEtapaManual(nMolde, etapa) {
-            const timestampActual = new Date().toISOString();
+        // Busca el id_tag del molde en planificacion_moldes (necesario para grabar en lecturas_rfid)
+        function resolverIdTagMolde(nMolde, producto, idTagDirecto) {
+            if (idTagDirecto) return idTagDirecto;
+
+            const candidatos = cacheMoldesPlanificacion.filter(m => String(m.n_molde ?? '') === String(nMolde ?? ''));
+            if (candidatos.length === 1) return candidatos[0].id_tag;
+            if (candidatos.length === 0) return null;
+
+            // Mismo número de molde en varias familias: se desempata por nombre de producto
+            const prod = (producto || '').trim().toLowerCase();
+            const exacto = candidatos.find(m => (m.nombre_simplificado || '').trim().toLowerCase() === prod);
+            if (exacto) return exacto.id_tag;
+
+            const parcial = candidatos.filter(m => {
+                const nom = (m.nombre_simplificado || '').trim().toLowerCase();
+                return nom && prod && (prod.includes(nom) || nom.includes(prod));
+            });
+            if (parcial.length === 1) return parcial[0].id_tag;
+
+            const activos = candidatos.filter(m => (m.Estado || '').toUpperCase() === 'SI');
+            if (activos.length === 1) return activos[0].id_tag;
+
+            return null;
+        }
+
+        async function registrarEtapaManual(nMolde, producto, idTagDirecto, etapa, boton) {
+            const idTag = resolverIdTagMolde(nMolde, producto, idTagDirecto);
+            if (!idTag) {
+                alert(`❌ No pude identificar el tag RFID del Molde #${nMolde} (${producto}).\nRevisá que exista una sola fila con ese n_molde en planificacion_moldes, o que el nombre_simplificado coincida con el producto.`);
+                return;
+            }
+
+            const zona = cacheZonasPorEtapa[etapa];
+            if (!zona) {
+                alert(`❌ No hay ninguna zona asignada a la etapa ${etapa} en config_zonas_rfid.\nAsignala en Supabase y recargá la app.`);
+                return;
+            }
+
+            const ok = confirm(`¿Registrar ${etapa} manual?\n\nMolde #${nMolde} – ${producto}\nTag: ${idTag}\nZona: ${zona}`);
+            if (!ok) return;
+
+            const ahora = fechaHoraLocal();
+            if (boton) boton.disabled = true;
 
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/lecturas_rfid_moldes`, {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/lecturas_rfid`, {
                     method: 'POST',
                     headers: {
                         ...SB_HEADERS,
@@ -1078,26 +1214,29 @@
                         'Prefer': 'return=minimal'
                     },
                     body: JSON.stringify({
-                        n_molde: nMolde,
-                        etapa_manual: etapa,
-                        fecha_hora: timestampActual,
-                        origen: 'OVERRIDE_MANUAL_APP'
+                        nombre_tag: 'Moldes',
+                        id_tag: String(idTag).trim(),
+                        zona: zona,
+                        fecha_hora: ahora,
+                        created_at: ahora,
+                        linea_produccion: ORIGEN_OVERRIDE
                     })
                 });
 
-                // Antes mostraba "✅" aunque Supabase rechazara el insert (4xx/5xx)
                 if (!res.ok) {
                     const detalle = await res.text();
                     console.error("Supabase rechazó la marca manual:", detalle);
-                    alert(`❌ Supabase rechazó la marca (Status ${res.status}). Revisá la consola.`);
+                    alert(`❌ Supabase rechazó la marca (Status ${res.status}).\n${detalle}`);
                     return;
                 }
 
-                alert(`✅ Etapa '${etapa}' registrada manualmente para Molde #${nMolde}.`);
+                alert(`✅ ${etapa} registrado para Molde #${nMolde} a las ${ahora.substring(11, 16)}.`);
                 cargarPlanificacionData();
             } catch (err) {
                 console.error("Error registrando marca manual:", err);
-                alert("❌ Fallo de conexión al guardar marca en Supabase.");
+                alert("❌ Fallo de conexión al guardar la marca en Supabase.");
+            } finally {
+                if (boton) boton.disabled = false;
             }
         }
 
@@ -1109,11 +1248,13 @@
             document.getElementById('modal-molde-estado').innerText = m.estado_flujo;
 
             const formatHora = (str) => str ? new Date(str).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Pendiente';
+            const prom = obtenerPromedioMolde(m);
 
             document.getElementById('modal-molde-body').innerHTML = `
                 <p><strong>Equipo Planificado:</strong> ${m.equipo_planificacion}</p>
                 <p><strong>Tiempo Objetivo Armado:</strong> ${m.tiempo_objetivo_min} minutos</p>
-                <p><strong>Tiempo Real Medido:</strong> ${m.tiempo_real_min ? m.tiempo_real_min + ' minutos' : 'En ejecución'}</p>
+                <p><strong>Tiempo Real Medido Hoy:</strong> ${m.tiempo_real_min ? m.tiempo_real_min + ' minutos' : 'En ejecución'}</p>
+                <p><strong>Promedio Real 30 días:</strong> ${prom ? `${fmtMin(prom.tiempo_real_prom_min)} en ${prom.ciclos_medidos} ciclos (${fmtDesvio(prom.desvio_prom_min)} vs objetivo)` : 'Sin ciclos medidos'}</p>
                 <p><strong>Estado Productividad:</strong> ${m.alerta_productividad}</p>
                 <hr style="border-color: var(--border-color); margin: 12px 0;">
                 <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Cronología de Registros RFID:</h4>
@@ -1199,14 +1340,16 @@
 
             container.innerHTML = data.map(molde => {
                 const estaActivo = (molde.Estado || '').toUpperCase() === 'SI';
+                const prom = cachePromediosMoldes.get(`T:${String(molde.id_tag || '').trim().toUpperCase()}`);
                 return `
                     <div class="card" style="border-left: 4px solid ${estaActivo ? 'var(--accent-teal)' : 'var(--danger)'};">
                         <div class="card-header">
                             <span>${molde.nombre_simplificado || 'Sin Nombre'}</span>
                             <span class="badge ${estaActivo ? 'badge-success' : 'badge-danger'}">${molde.Estado || 'NO'}</span>
                         </div>
-                        <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag}</small></p>
-                        <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'}</small></p>
+                        <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag} | <strong>N°:</strong> ${molde.n_molde ?? '--'}</small></p>
+                        <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'} | 👥 <strong>Equipo:</strong> ${molde.Equipo || 'N/A'}</small></p>
+                        <p><small>⏱️ <strong>Ciclo objetivo:</strong> ${molde.ciclo_min ?? '--'} min | <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${argJs(molde.Estado)}')">
                                 ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
@@ -1485,7 +1628,7 @@
         }
 
         /* 3. PROCESOS & TIEMPOS
-           Fuente: RPC fn_tiempos_moldes (agrega en Supabase por molde el ciclo DESARMADO ➔ ARMADO). */
+           Fuente: fn_tiempos_moldes / fn_ciclos_rfid (ciclos DESARMADO ➔ ARMADO calculados desde lecturas_rfid). */
         async function cargarProcesosYTiemposData() {
             const containerEq = document.getElementById('view-proc-equipos');
             const info = document.getElementById('proc-info-periodo');
@@ -1497,16 +1640,13 @@
 
                 const desde = fechaPuntual || fechaLocalISO(d30);
                 const hasta = fechaPuntual || fechaLocalISO();
+                rangoProcesos = { desde, hasta };
 
                 info.innerText = fechaPuntual
-                    ? `Tiempo real = ciclo Desarmado ➔ Armado del día ${fechaPuntual.split('-').reverse().join('/')}.`
-                    : `Tiempo real = promedio del ciclo Desarmado ➔ Armado (ventana móvil de 30 días). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
+                    ? `Tiempo real = ciclo Desarmado ➔ Armado del día ${fechaPuntual.split('-').reverse().join('/')} (lecturas RFID + marcas manuales).`
+                    : `Tiempo real = promedio del ciclo Desarmado ➔ Armado (últimos 30 días, lecturas RFID + marcas manuales). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
 
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/fn_tiempos_moldes`, {
-                    method: 'POST',
-                    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT })
-                });
+                const res = await fetchRpc('fn_tiempos_moldes', { p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT });
 
                 if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
 
@@ -1667,6 +1807,7 @@
             }
 
             container.innerHTML = `
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 6px;">👆 Hacé clic en un molde para ver cada ciclo medido.</p>
                 <table class="table-teal">
                     <thead>
                         <tr>
@@ -1694,7 +1835,7 @@
                             const ultima = m.ultima_medicion ? m.ultima_medicion.split('-').reverse().join('/') : '--';
 
                             return `
-                                <tr>
+                                <tr class="fila-interactiva" onclick="verCiclosMolde('${argJs(m.id_tag)}', '${argJs(m.n_molde)}', '${argJs(m.producto)}')">
                                     <td><strong>#${m.n_molde}</strong></td>
                                     <td>${m.producto || '--'}</td>
                                     <td>${m.ciclos_medidos}</td>
@@ -1711,6 +1852,65 @@
                     </tbody>
                 </table>
             `;
+        }
+
+        // Detalle ciclo por ciclo de un molde (auditable: de dónde sale cada promedio)
+        async function verCiclosMolde(idTag, nMolde, producto) {
+            document.getElementById('modal-det-titulo').innerText = `Ciclos Molde #${nMolde} – ${producto}`;
+            document.getElementById('modal-det-badge').innerText = `${(rangoProcesos.desde || '').split('-').reverse().join('/')} → ${(rangoProcesos.hasta || '').split('-').reverse().join('/')}`;
+            document.getElementById('modal-det-body').innerHTML = '<p style="color: var(--text-muted);">Cargando ciclos desde lecturas RFID...</p>';
+            document.getElementById('modal-detalle').style.display = 'flex';
+
+            try {
+                const res = await fetchRpc('fn_ciclos_rfid', { p_desde: rangoProcesos.desde, p_hasta: rangoProcesos.hasta });
+                if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+
+                const data = await res.json();
+                const tagBuscado = String(idTag || '').trim().toUpperCase();
+                const ciclos = (Array.isArray(data) ? data : [])
+                    .filter(c => String(c.id_tag || '').trim().toUpperCase() === tagBuscado)
+                    .sort((a, b) => String(b.hora_desarmado).localeCompare(String(a.hora_desarmado)));
+
+                if (ciclos.length === 0) {
+                    document.getElementById('modal-det-body').innerHTML = '<p style="color: var(--text-muted);">No hay ciclos para este molde en el período.</p>';
+                    return;
+                }
+
+                document.getElementById('modal-det-body').innerHTML = `
+                    <p><small style="color: var(--text-muted);">🏷️ Tag: <code>${idTag}</code> · ${ciclos.length} ciclos medidos</small></p>
+                    <table class="table-teal">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>🔓 Desarmado</th>
+                                <th>🔒 Armado</th>
+                                <th>Real</th>
+                                <th>Objetivo</th>
+                                <th>Desvío</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${ciclos.map(c => {
+                                const desv = num(c.desvio_min);
+                                const colorDesv = desv === null ? 'var(--text-muted)' : (desv > 0 ? 'var(--warning)' : 'var(--accent-teal)');
+                                return `
+                                    <tr>
+                                        <td>${String(c.fecha || '').split('-').reverse().join('/')}</td>
+                                        <td>${horaCorta(c.hora_desarmado)}</td>
+                                        <td>${horaCorta(c.hora_armado)}</td>
+                                        <td style="font-weight:700;">${fmtMin(c.tiempo_ciclo_min)}</td>
+                                        <td>${fmtMin(c.tiempo_objetivo_min)}</td>
+                                        <td style="color: ${colorDesv};">${fmtDesvio(c.desvio_min)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (err) {
+                console.error("Error cargando ciclos del molde:", err);
+                document.getElementById('modal-det-body').innerHTML = `<p style="color: var(--danger);">❌ Error al consultar fn_ciclos_rfid: ${err.message}</p>`;
+            }
         }
 
         /* 4. MANTENIMIENTO */
@@ -2041,25 +2241,19 @@
         async function cargarIndicadoresData() {
             try {
                 if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0 || cacheRankingBienestar.length === 0) {
-                    const [resEf, resCal, resMant, resBien, resDem] = await Promise.all([
-                        fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: SB_HEADERS }),
-                        fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }),
-                        fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, { headers: SB_HEADERS }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS })
+                    const [ef, cal, mant, bien, dem] = await Promise.all([
+                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: SB_HEADERS }), 'reporte_eficiencia_moldes'),
+                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }), 'vista_gestion_calidad_app'),
+                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }), 'registro_mejoras'),
+                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, { headers: SB_HEADERS }), 'ranking_operarios_inteligente'),
+                        jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes')
                     ]);
 
-                    const ef = await resEf.json();
-                    const cal = await resCal.json();
-                    const mant = await resMant.json();
-                    const bien = await resBien.json();
-                    const dem = await resDem.json();
-
-                    cacheEficienciaMoldes = Array.isArray(ef) ? ef : [];
-                    cacheCalidad = Array.isArray(cal) ? cal : [];
-                    cacheMantenimiento = Array.isArray(mant) ? mant : [];
+                    cacheEficienciaMoldes = ef;
+                    cacheCalidad = cal;
+                    cacheMantenimiento = mant;
                     cacheRankingBienestar = deduplicarOperarios(bien);
-                    cacheDemandaOdoo = Array.isArray(dem) ? dem : [];
+                    cacheDemandaOdoo = dem;
                 }
 
                 const totalMoldes = cacheEficienciaMoldes.length || 1;
