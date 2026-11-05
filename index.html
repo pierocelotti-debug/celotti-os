@@ -306,7 +306,7 @@
             overflow-y: auto;
         }
         .modal-box-ancho {
-            max-width: 900px;
+            max-width: 980px;
         }
         .btn-close-modal {
             position: absolute;
@@ -352,6 +352,8 @@
             background-color: #090d16;
             color: var(--accent-teal);
             font-weight: 700;
+            position: sticky;
+            top: 0;
         }
         .table-teal tr:nth-child(even) {
             background-color: rgba(255, 255, 255, 0.02);
@@ -468,6 +470,33 @@
             padding-top: 6px;
         }
 
+        /* CAPACIDAD DEL DÍA (PLANIFICACIÓN) */
+        .grid-capacidad {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 14px;
+        }
+        .grid-capacidad .card p {
+            margin: 3px 0;
+        }
+        .cap-barra {
+            position: relative;
+            height: 8px;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .cap-barra > div {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            border-radius: 4px;
+        }
+        .cap-plan { background: rgba(59, 130, 246, 0.45); }
+        .cap-gan { background: var(--accent-teal); }
+
         /* KPIs TEAL */
         .grid-kpis-teal {
             display: grid;
@@ -574,6 +603,11 @@
             overflow-x: auto;
             margin: 8px 0 0;
         }
+        .drill-hint {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin: 8px 0 0;
+        }
     </style>
 </head>
 <body>
@@ -649,6 +683,12 @@
 
             <!-- RESUMEN PLANIFICADO VS PRODUCIDO (SOLO EN MODO FOTO) -->
             <div class="card" id="banner-foto" style="display: none; margin-bottom: 20px; border-left: 4px solid var(--gold);"></div>
+
+            <!-- CAPACIDAD DEL DÍA: MINUTOS DISPONIBLES VS PLANIFICADOS POR EQUIPO -->
+            <div id="bloque-capacidad" style="margin-bottom: 22px;">
+                <h3 id="titulo-capacidad" style="color: var(--accent-teal); margin: 0 0 10px; font-size: 1rem;">👥 Capacidad del día: minutos disponibles vs. planificados</h3>
+                <div id="capacidad-plan" class="grid-capacidad">Cargando capacidad de los equipos...</div>
+            </div>
 
             <div class="kpi-container" id="kpis-plan-moldes">
                 <div class="kpi-card kpi-card-interactive" id="kpi-card-finalizados" style="border-top: 3px solid var(--accent-teal);" onclick="seleccionarFiltroKpi('FINALIZADO')">
@@ -844,16 +884,18 @@
             <div class="card" style="margin-top: 8px;">
                 <h3 style="margin-top:0; color: var(--accent-teal);">🌳 Cómo se conectan los KPIs</h3>
                 <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0;">
-                    La salud del equipo y la productividad mueven la calidad, el plan y la velocidad; eso mueve el OEE y los giros, y todo termina en margen y caja.
+                    Quién viene a trabajar define la capacidad; la carga planificada tiene que entrar en esa capacidad; la eficiencia de la mano de obra, la calidad y el plan mueven el OEE y los giros, y todo termina en margen y caja.
                     Cada equipo es dueño de sus números y propone sus propias metas.
                 </p>
-                <div class="arbol-kpis">                 🎯 Margen por Molde-Día (6)
-                /            |              \
-     OEE de Molde (1)   Giros/Molde (2)   Stock + Caja (8)
-      /      |      \         |                |
- FPY (3)  Plan (4)  Velocidad (9)        OTIF Cliente (5)
-               \         |         /
-          Productividad (7)  ·  Pulso Teal (10)</div>
+                <div class="arbol-kpis">                     🎯 Margen por Molde-Día (6)
+                    /            |              \
+         OEE de Molde (1)   Giros/Molde (2)   Stock + Caja (8)
+          /      |      \         |                |
+     FPY (3)  Plan (4)  Velocidad (9)        OTIF Cliente (5)
+                   \         |
+     Carga vs Capacidad (11)  ·  Eficiencia MOD (7)
+                         \     /
+                     Pulso Teal (10)</div>
             </div>
         </div>
     </div>
@@ -941,8 +983,14 @@
         // A partir de este % sobre el objetivo, el ciclo se considera crítico (foto histórica)
         const UMBRAL_CRITICO_PCT = 50;
 
+        // Banda sana de carga (minutos planificados / minutos disponibles)
+        const CARGA_MIN_SANA = 0.85;
+        const CARGA_MAX_SANA = 1.05;
+
         // Marca que identifica en lecturas_rfid las etapas cargadas a mano desde la app
         const ORIGEN_OVERRIDE = 'OVERRIDE_MANUAL_APP';
+
+        const EQUIPOS_MOLDES = ['Amarillo', 'Azul', 'Rojo', 'Verde'];
 
         let cacheCalidad = [];
         let cacheDesmoldeProcesado = [];
@@ -953,11 +1001,11 @@
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
         let cacheTiemposMoldes = [];
+        let cacheCapacidad = [];
 
         // KPIs Teal: período actual, período anterior y metas propuestas por los equipos
         let cacheKpisTeal = { actual: null, anterior: null };
         let cacheKpiMetas = [];
-        let modoProductividadKg = false;
 
         // null = tiempo real; 'YYYY-MM-DD' = foto histórica de ese día
         let modoFotoFecha = null;
@@ -1082,6 +1130,13 @@
             return n === null ? null : Math.min(n, 1);
         }
 
+        function ratio(a, b, tope = false) {
+            const x = num(a), y = num(b);
+            if (x === null || !y) return null;
+            const r = x / y;
+            return tope ? Math.min(r, 1) : r;
+        }
+
         function fuenteHtml(fuentes) {
             if (!fuentes) return '';
             return String(fuentes).split('+').map(f => f.trim()).filter(Boolean).map(f => {
@@ -1096,6 +1151,23 @@
             if (pct >= 90) return 'var(--accent-teal)';
             if (pct >= 70) return 'var(--warning)';
             return 'var(--danger)';
+        }
+
+        // Semáforo de carga: equilibrado dentro de la banda, sobrecarga arriba, holgura/subcarga abajo
+        function colorCarga(c) {
+            if (c === null || c === undefined) return 'var(--text-muted)';
+            if (c > CARGA_MAX_SANA) return 'var(--danger)';
+            if (c >= CARGA_MIN_SANA) return 'var(--accent-teal)';
+            if (c >= 0.7) return 'var(--warning)';
+            return 'var(--danger)';
+        }
+
+        function etiquetaCarga(c) {
+            if (c === null || c === undefined) return 'Sin datos para calcular la carga';
+            if (c > CARGA_MAX_SANA) return '🔴 Sobrecargado: lo planificado no entra en los minutos disponibles';
+            if (c >= CARGA_MIN_SANA) return '🟢 Equilibrado';
+            if (c >= 0.7) return '🟡 Con holgura: hay capacidad para sumar moldes';
+            return '🔴 Subcargado: mucha capacidad sin planificar';
         }
 
         // Devuelve [] si la respuesta falla, para que un endpoint caído no rompa toda la pantalla
@@ -1120,6 +1192,14 @@
                 headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
                 body: JSON.stringify(params)
             });
+        }
+
+        // Llama una RPC y devuelve un array; si falla, lanza el error con el detalle de Supabase
+        async function rpcJson(nombre, params) {
+            const res = await fetchRpc(nombre, params);
+            if (!res.ok) throw new Error(`${nombre} → Status ${res.status}: ${await res.text()}`);
+            const data = await res.json();
+            return Array.isArray(data) ? data : [];
         }
 
         // Normaliza nombres para deduplicar: sin tildes, minúsculas, espacios simples y palabras ordenadas
@@ -1221,7 +1301,7 @@
                 document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
                 cargarBienestarData();
             } else if(tab === 'indicadores') {
-                document.getElementById('tab-title').innerText = 'Indicadores Teal: Eficiencia, Calidad y Autogestión';
+                document.getElementById('tab-title').innerText = 'Indicadores Teal: Eficiencia, Calidad, Capacidad y Autogestión';
                 cargarIndicadoresData();
             }
         }
@@ -1270,16 +1350,18 @@
                     ? jsonSeguro(fetchRpc('fn_foto_planificacion', { p_fecha: modoFotoFecha }), 'fn_foto_planificacion')
                     : jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*&order=n_molde.asc`, { headers: SB_HEADERS }), 'reporte_eficiencia_moldes');
 
-                const [moldesRaw, dem, mol, zonas, promedios] = await Promise.all([
+                const [moldesRaw, dem, mol, zonas, promedios, capacidad] = await Promise.all([
                     fuenteMoldes,
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: SB_HEADERS }), 'planificacion_moldes'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/config_zonas_rfid?select=zona,etapa`, { headers: SB_HEADERS }), 'config_zonas_rfid'),
-                    jsonSeguro(fetchRpc('fn_tiempos_moldes', { p_desde: fechaLocalISO(d30), p_hasta: fechaLocalISO(), p_tolerancia_pct: TOLERANCIA_DESVIO_PCT }), 'fn_tiempos_moldes')
+                    jsonSeguro(fetchRpc('fn_tiempos_moldes', { p_desde: fechaLocalISO(d30), p_hasta: fechaLocalISO(), p_tolerancia_pct: TOLERANCIA_DESVIO_PCT }), 'fn_tiempos_moldes'),
+                    jsonSeguro(fetchRpc('fn_capacidad_dia', { p_fecha: modoFotoFecha || fechaLocalISO() }), 'fn_capacidad_dia')
                 ]);
 
                 cacheDemandaOdoo = dem;
                 cacheMoldesPlanificacion = mol;
+                cacheCapacidad = capacidad;
 
                 if (modoFotoFecha) {
                     cacheFotoDia = moldesRaw
@@ -1308,12 +1390,89 @@
                 });
 
                 renderizarBannerFoto();
+                renderizarCapacidadPlan();
                 actualizarKpisMoldes(getDatasetPlan());
                 filtrarPlanificacion();
                 renderizarDemandaOdoo(cacheDemandaOdoo);
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
             } catch (e) { 
                 console.error("Error al cargar datos de planificación", e);
+            }
+        }
+
+        /* Capacidad del día: armadores presentes × jornada vs minutos planificados */
+        function renderizarCapacidadPlan() {
+            const cont = document.getElementById('capacidad-plan');
+            const fecha = modoFotoFecha || fechaLocalISO();
+            document.getElementById('titulo-capacidad').innerText = modoFotoFecha
+                ? `👥 Capacidad del ${diaSemana(fecha)} ${fechaAR(fecha)}: minutos disponibles vs. planificados`
+                : '👥 Capacidad de hoy: minutos disponibles vs. planificados';
+
+            if (!cacheCapacidad.length) {
+                cont.innerHTML = '<p style="color: var(--text-muted);">Sin datos de capacidad. Verificá que se haya ejecutado el SQL de capacidad (fn_capacidad_dia) y que Personas tenga equipo y puesto.</p>';
+                return;
+            }
+
+            const jornada = parseInt(cacheCapacidad[0].minutos_jornada) || 0;
+            const aviso = jornada === 0
+                ? '<div class="aviso-secuencia" style="grid-column: 1 / -1;">ℹ️ Día no laborable (fin de semana o feriado): los minutos disponibles se calculan con las horas realmente fichadas.</div>'
+                : '';
+
+            cont.innerHTML = aviso + cacheCapacidad.map(c => c.tipo === 'MOLDES' ? tarjetaCapacidadEquipo(c) : tarjetaCapacidadHormigon(c)).join('');
+        }
+
+        function tarjetaCapacidadEquipo(c) {
+            const disp = num(c.min_disponibles);
+            const plan = num(c.min_planificados);
+            const gan = num(c.min_ganados);
+            const carga = ratio(plan, disp);
+            const col = colorCarga(carga);
+            const anchoPlan = disp ? Math.min(100, ((plan || 0) / disp) * 100) : 0;
+            const anchoGan = disp ? Math.min(100, ((gan || 0) / disp) * 100) : 0;
+
+            return `
+                <div class="card card-interactive" style="border-left: 4px solid ${col}; padding: 14px;" onclick="filtrarPorEquipoPlan('${argJs(c.equipo)}')">
+                    <div class="card-header" style="margin-bottom: 6px;">
+                        <span>Equipo ${c.equipo}</span>
+                        <span class="badge" style="background: ${col}; color: #0f172a;">Carga ${fmtPct(carga)}</span>
+                    </div>
+                    <p><small>👥 <strong>Armadores:</strong> ${c.presentes} / ${c.esperados} presentes${parseInt(c.sin_tag) > 0 ? ` · <span style="color: var(--warning);">${c.sin_tag} sin tag</span>` : ''}</small></p>
+                    ${c.ausentes ? `<p><small style="color: var(--warning);">🚫 Sin fichar: ${c.ausentes}</small></p>` : ''}
+                    <p><small>⏱️ <strong>Disponibles:</strong> ${fmtNum(disp, 0)} min <span style="color: var(--text-muted);">(de ${fmtNum(c.min_disponibles_teoricos, 0)} con todos)</span></small></p>
+                    <p><small>📋 <strong>Planificados:</strong> ${fmtNum(plan, 0)} min · ${c.moldes_programados} moldes</small></p>
+                    <p><small>✅ <strong>Ganados:</strong> ${fmtNum(gan, 0)} min · ${c.moldes_llenados} llenados</small></p>
+                    <div class="cap-barra" title="Azul: planificado · Verde: ganado (sobre minutos disponibles)">
+                        <div class="cap-plan" style="width: ${anchoPlan}%;"></div>
+                        <div class="cap-gan" style="width: ${anchoGan}%;"></div>
+                    </div>
+                    <div class="kpi-sub">${etiquetaCarga(carga)}</div>
+                </div>
+            `;
+        }
+
+        function tarjetaCapacidadHormigon(c) {
+            const porLlenador = ratio(c.moldes_llenados, c.presentes);
+            return `
+                <div class="card" style="border-left: 4px solid var(--silver); padding: 14px;">
+                    <div class="card-header" style="margin-bottom: 6px;">
+                        <span>🏗️ ${c.equipo} (llenado)</span>
+                        <span class="badge">${c.presentes} / ${c.esperados}</span>
+                    </div>
+                    <p><small>👥 <strong>Llenadores presentes:</strong> ${c.presentes} de ${c.esperados}${parseInt(c.sin_tag) > 0 ? ` · <span style="color: var(--warning);">${c.sin_tag} sin tag</span>` : ''}</small></p>
+                    ${c.ausentes ? `<p><small style="color: var(--warning);">🚫 Sin fichar: ${c.ausentes}</small></p>` : ''}
+                    <p><small>⏱️ <strong>Disponibles:</strong> ${fmtNum(c.min_disponibles, 0)} min</small></p>
+                    <p><small>🧱 <strong>Moldes llenados (planta):</strong> ${c.moldes_llenados} de ${c.moldes_programados} programados</small></p>
+                    <p><small>📈 <strong>Moldes por llenador:</strong> ${fmtNum(porLlenador, 1)}</small></p>
+                    <div class="kpi-sub">Llena los moldes de todos los equipos: se mide con los llenados de toda la planta.</div>
+                </div>
+            `;
+        }
+
+        function filtrarPorEquipoPlan(equipo) {
+            const sel = document.getElementById('filtro-plan-equipo');
+            if ([...sel.options].some(o => o.value === equipo)) {
+                sel.value = sel.value === equipo ? 'TODOS' : equipo;
+                filtrarPlanificacion();
             }
         }
 
@@ -1503,11 +1662,13 @@
 
         function toggleVistaPlanificacion() {
             const vista = document.getElementById('filtro-plan-vista').value;
-            document.getElementById('container-plan-realtime').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
+            const esMonitoreo = vista === 'MONITOREO_REALTIME';
+            document.getElementById('container-plan-realtime').style.display = esMonitoreo ? 'grid' : 'none';
             document.getElementById('container-plan-demanda').style.display = vista === 'DEMANDA' ? 'grid' : 'none';
             document.getElementById('container-plan-moldes').style.display = vista === 'MOLDES' ? 'grid' : 'none';
-            document.getElementById('kpis-plan-moldes').style.display = vista === 'MONITOREO_REALTIME' ? 'grid' : 'none';
-            document.getElementById('banner-foto').style.display = (vista === 'MONITOREO_REALTIME' && modoFotoFecha) ? 'block' : 'none';
+            document.getElementById('kpis-plan-moldes').style.display = esMonitoreo ? 'grid' : 'none';
+            document.getElementById('bloque-capacidad').style.display = esMonitoreo ? 'block' : 'none';
+            document.getElementById('banner-foto').style.display = (esMonitoreo && modoFotoFecha) ? 'block' : 'none';
         }
 
         function actualizarKpisMoldes(data) {
@@ -1817,7 +1978,7 @@
                         </div>
                         <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag} | <strong>N°:</strong> ${molde.n_molde ?? '--'}</small></p>
                         <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'} | 👥 <strong>Equipo:</strong> ${molde.Equipo || 'N/A'}</small></p>
-                        <p><small>⏱️ <strong>Ciclo objetivo:</strong> ${molde.ciclo_min ?? '--'} min | <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
+                        <p><small>⏱️ <strong>Ciclo objetivo:</strong> ${molde.ciclo_min ?? '<span style="color: var(--warning);">sin cargar</span>'} min | <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
                         <p><small>⚖️ <strong>Peso:</strong> ${molde.peso_kg ?? '--'} kg | 💲 <strong>Costo:</strong> ${molde.costo_estandar != null ? fmtMoneda(molde.costo_estandar) : '--'} | <strong>Precio:</strong> ${molde.precio_venta != null ? fmtMoneda(molde.precio_venta) : '--'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${argJs(molde.Estado)}')">
@@ -2197,9 +2358,8 @@
             const container = document.getElementById('view-proc-equipos');
             container.style.display = 'grid';
 
-            const equiposBase = ['Amarillo', 'Azul', 'Rojo', 'Verde'];
             const equiposData = [...new Set(cacheTiemposMoldes.map(m => m.equipo).filter(Boolean))];
-            const equipos = [...new Set([...equiposBase, ...equiposData])];
+            const equipos = [...new Set([...EQUIPOS_MOLDES, ...equiposData])];
 
             container.innerHTML = equipos.map(eq => {
                 const moldesEquipo = cacheTiemposMoldes.filter(m => m.equipo === eq);
@@ -2711,20 +2871,20 @@
             }
         }
 
-        /* 7. INDICADORES TEAL (10 KPIs) */
+        /* 7. INDICADORES TEAL (11 KPIs) */
 
         function datoEquipo(dataset, equipo) {
             if (!dataset || !Array.isArray(dataset.equipos)) return null;
             return dataset.equipos.find(e => e.equipo === equipo) || null;
         }
 
-        // Definición de los 10 KPIs: cómo se calculan, cómo se muestran y de dónde salen
+        // Definición de los KPIs: cómo se calculan, cómo se muestran y de dónde salen
         const KPI_TEAL = [
             {
                 id: 'oee', n: 1, icono: '⚙️', titulo: 'OEE de Molde', tipo: 'pct', metaSugerida: 0.65, serie: 'oee',
                 descripcion: 'Cuánto del potencial de cada molde se convierte en piezas buenas. Junta en un número las tres pérdidas: molde parado, molde lento y pieza defectuosa.',
-                formula: 'Disponibilidad × Rendimiento × Calidad. Disponibilidad = molde-días con actividad / (moldes activos × días de producción). Rendimiento = Σ ciclo objetivo / Σ ciclo real (tope 100%). Calidad = FPY de desmolde.',
-                fuente: 'historico_eficiencia_moldes · fn_ciclos_unificados · vista_kpi_desmolde · planificacion_moldes',
+                formula: 'Disponibilidad × Rendimiento × Calidad. Disponibilidad = molde-días con actividad / molde-días activos disponibles. Rendimiento = Σ ciclo objetivo / Σ ciclo real (tope 100%). Calidad = FPY de desmolde.',
+                fuente: 'kpi_diario · kpi_molde_diario (desde historico_eficiencia_moldes, lecturas_rfid y registro_desmolde_calidad)',
                 valor: (e) => e?.oee,
                 sub: (e, d) => e ? `Disp. ${fmtPct(e.disponibilidad)} · Rend. ${fmtPct(capUno(e.rendimiento))} · Cal. ${fmtPct(e.calidad ?? datoEquipo(d, 'PLANTA')?.calidad)}` : '',
                 estado: (e) => !e || e.oee == null ? 'sin' : ((e.ciclos === 0 || e.calidad_es_planta) ? 'parcial' : 'ok'),
@@ -2739,8 +2899,8 @@
             {
                 id: 'giros', n: 2, icono: '🔄', titulo: 'Giros por Molde', tipo: 'dec2', unidad: 'giros/molde·día', metaSugerida: 0.9,
                 descripcion: 'Cuántos llenados hace cada molde activo por día. Crecer en giros es crecer sin comprar moldes nuevos.',
-                formula: 'Eventos de LLENADO por antena (separados más de 60 min) / (moldes activos × días de producción). Molde ocioso = activo sin ningún llenado en el período.',
-                fuente: 'lecturas_rfid (zona Llenado) · config_zonas_rfid · planificacion_moldes (Estado = SI)',
+                formula: 'Eventos de LLENADO por antena (separados más de 60 min) / molde-días activos disponibles. Molde ocioso = activo sin ningún llenado en el período.',
+                fuente: 'kpi_molde_diario (desde lecturas_rfid zona Llenado + planificacion_moldes Estado = SI)',
                 valor: (e) => e?.giros,
                 sub: (e) => e ? `${e.eventos_llenado} llenados · ${e.moldes_activos} moldes activos · ${e.moldes_ociosos} ociosos` : '',
                 estado: (e) => !e || !e.moldes_activos ? 'sin' : 'ok',
@@ -2769,7 +2929,7 @@
             {
                 id: 'plan', n: 4, icono: '📋', titulo: 'Cumplimiento del Plan', tipo: 'pct', metaSugerida: 0.9, serie: 'cumplimiento',
                 descripcion: 'Cuánto de lo que el equipo se comprometió a fabricar efectivamente lo fabricó. Es el compromiso del equipo, no una orden.',
-                formula: 'Moldes llenados / moldes programados (filas del histórico del día).',
+                formula: 'Moldes llenados / moldes programados (filas del histórico), solo en días con producción.',
                 fuente: 'historico_eficiencia_moldes',
                 valor: (e) => e?.cumplimiento,
                 sub: (e) => e ? `${e.llenados} de ${e.programados} moldes programados llenados` : '',
@@ -2790,7 +2950,7 @@
             {
                 id: 'margen', n: 6, icono: '🎯', titulo: 'Margen por Molde-Día', tipo: 'moneda', metaSugerida: null,
                 descripcion: 'Cuánta plata deja cada molde activo por día. Es la métrica central: si el molde es el cuello de botella, importa el margen por molde, no por pieza.',
-                formula: 'Σ (precio_venta − costo_estandar) de las piezas llenadas / (moldes activos × días de producción).',
+                formula: 'Σ (precio_venta − costo_estandar) de las piezas llenadas / molde-días activos disponibles.',
                 fuente: 'historico_eficiencia_moldes · planificacion_moldes (precio_venta, costo_estandar)',
                 valor: (e) => e && e.llenados_con_margen > 0 ? e.margen_molde_dia : null,
                 sub: (e) => e ? `Margen total ${fmtMoneda(e.margen)} · ${e.llenados_con_margen}/${e.llenados} piezas con precio y costo` : '',
@@ -2804,21 +2964,38 @@
                 ]
             },
             {
-                id: 'productividad', n: 7, icono: '💪', titulo: 'Productividad', tipo: 'num1', metaSugerida: null,
-                unidadDinamica: () => modoProductividadKg ? 'kg/hora-persona' : 'piezas/hora-persona',
-                descripcion: 'Kg de hormigón producidos por cada hora trabajada, por equipo. Se mide en kg porque un pilar doble no es lo mismo que una losetita.',
-                formula: 'Σ (piezas llenadas × peso_kg) / horas fichadas del equipo. Sin peso cargado se muestra en piezas por hora-persona.',
-                fuente: 'historico_eficiencia_moldes · planificacion_moldes.peso_kg · vista_reporte_asistencia · Personas.equipo',
-                valor: (e) => e ? (modoProductividadKg ? e.kg_hh : e.piezas_hh) : null,
-                sub: (e) => e ? `${fmtNum(e.horas, 0)} h fichadas · ${modoProductividadKg ? fmtNum(e.kg, 0) + ' kg' : e.llenados + ' piezas'}` : '',
-                estado: (e) => !e || !num(e.horas) ? 'sin' : (!modoProductividadKg ? 'dato' : (e.llenados_con_peso < e.llenados ? 'parcial' : 'ok')),
-                requiere: 'Cargá peso_kg por molde en planificacion_moldes para medir en kg. Verificá que cada persona tenga su equipo en Personas.equipo.',
+                id: 'productividad', n: 7, icono: '💪', titulo: 'Eficiencia de Mano de Obra Directa', tipo: 'pct', metaSugerida: 0.85, serie: 'eficiencia_mod', personas: true,
+                descripcion: 'De todos los minutos que los armadores/desarmadores presentes tenían disponibles, cuántos se convirtieron en moldes llenados, medidos con el tiempo estándar (ciclo_min) de cada molde.',
+                formula: 'Minutos ganados / minutos disponibles. Minutos ganados = Σ ciclo_min de los moldes llenados. Minutos disponibles = armadores presentes × jornada (475 min de lunes a jueves, 415 el viernes).',
+                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · historico_eficiencia_moldes · planificacion_moldes.ciclo_min',
+                valor: (e) => e?.eficiencia_mod,
+                sub: (e) => e ? `${fmtNum(e.min_ganados, 0)} min ganados de ${fmtNum(e.min_disponibles, 0)} disp. · ${fmtNum(e.piezas_por_armador, 1)} moldes/armador-día` : '',
+                estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_ganados) ? 'ok' : 'dato'),
+                requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, un molde llenado no suma minutos ganados. Verificá también que los armadores tengan tag.',
                 columnas: [
-                    ['Horas fichadas', e => fmtNum(e.horas, 0)],
-                    ['Piezas llenadas', e => e.llenados],
-                    ['Kg producidos', e => e.kg != null ? fmtNum(e.kg, 0) : '--'],
-                    ['Kg/HH', e => e.kg_hh != null ? fmtNum(e.kg_hh, 1) : '--'],
-                    ['Piezas/HH', e => fmtNum(e.piezas_hh, 2)]
+                    ['Armador-días', e => `${e.dir_presentes ?? 0} / ${e.dir_esperados ?? 0}`],
+                    ['Min disponibles', e => fmtNum(e.min_disponibles, 0)],
+                    ['Min ganados', e => fmtNum(e.min_ganados, 0)],
+                    ['Eficiencia', e => `<strong>${fmtPct(e.eficiencia_mod)}</strong>`],
+                    ['Moldes/armador-día', e => fmtNum(e.piezas_por_armador, 1)]
+                ]
+            },
+            {
+                id: 'capacidad', n: 11, icono: '📐', titulo: 'Carga vs. Capacidad', tipo: 'pct', metaSugerida: 0.95, serie: 'carga', personas: true,
+                banda: [CARGA_MIN_SANA, CARGA_MAX_SANA],
+                descripcion: 'Si lo que se planificó para cada equipo entra en los minutos que realmente tuvo, según quién vino a trabajar. Por encima de 105% el equipo está sobrecargado; por debajo de 85% hay capacidad sin planificar.',
+                formula: 'Minutos planificados / minutos disponibles. Planificados = Σ ciclo_min de los moldes programados. Disponibles = armadores presentes × jornada. Capacidad perdida por ausencias = (esperados − presentes) × jornada.',
+                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · feriados · historico_eficiencia_moldes · planificacion_moldes.ciclo_min',
+                valor: (e) => e?.carga,
+                sub: (e) => e ? `${fmtNum(e.min_planificados, 0)} min plan. / ${fmtNum(e.min_disponibles, 0)} disp. · Asistencia ${fmtPct(e.asistencia_directa)} · Perdidos ${fmtNum(e.capacidad_perdida, 0)} min` : '',
+                estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_planificados) ? 'ok' : 'dato'),
+                requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, los moldes programados no suman minutos planificados.',
+                columnas: [
+                    ['Asistencia', e => `${e.dir_presentes ?? 0}/${e.dir_esperados ?? 0} (${fmtPct(e.asistencia_directa)})`],
+                    ['Min disponibles', e => fmtNum(e.min_disponibles, 0)],
+                    ['Min planificados', e => fmtNum(e.min_planificados, 0)],
+                    ['Carga', e => `<strong style="color: ${colorCarga(num(e.carga))};">${fmtPct(e.carga)}</strong>`],
+                    ['Capacidad perdida', e => `${fmtNum(e.capacidad_perdida, 0)} min`]
                 ]
             },
             {
@@ -2840,8 +3017,8 @@
             {
                 id: 'pulso', n: 10, icono: '🌱', titulo: 'Pulso Teal', tipo: 'pct', metaSugerida: 0.8, global: true,
                 descripcion: 'Si la organización realmente se autogestiona y está sana. Reemplaza al viejo "Teal Index", que medía cumplimiento ante un auditor.',
-                formula: 'Promedio de: Participación (% de personas activas que reportaron mejoras o incidencias), Toma rápida (% de casos tomados en menos de 24 h), Presencia (persona-días fichados / esperados) y Cuidado (% del plantel fuera de ART o enfermedad).',
-                fuente: 'Personas · registro_mejoras · gestion_calidad · vista_reporte_asistencia · feriados',
+                formula: 'Promedio de: Participación (% de personas activas que reportaron mejoras o incidencias), Toma rápida (% de casos tomados en menos de 24 h), Presencia (persona-días fichados / esperados de quienes tienen tag) y Cuidado (% del plantel fuera de ART o enfermedad).',
+                fuente: 'Personas · registro_mejoras · gestion_calidad · lecturas_rfid (PERSONAL) · config_jornada · feriados',
                 valor: (e, d) => d?.pulso?.valor,
                 sub: (e, d) => d?.pulso ? `Part. ${fmtPct(d.pulso.participacion)} · Toma ${fmtPct(d.pulso.toma_rapida)} · Pres. ${fmtPct(d.pulso.presencia)} · Cuid. ${fmtPct(d.pulso.cuidado)}` : '',
                 estado: (e, d) => d?.pulso?.valor == null ? 'sin' : 'ok'
@@ -2865,7 +3042,6 @@
         }
 
         function unidadKpi(def) {
-            if (def.unidadDinamica) return def.unidadDinamica();
             return def.unidad || '';
         }
 
@@ -2888,13 +3064,20 @@
             return null;
         }
 
+        // Para KPIs con banda sana (Carga), mejorar es acercarse al centro de la banda
         function deltaHtml(def, actual, anterior) {
             if (actual === null || anterior === null) return '<span style="color: var(--text-muted);">Sin comparación con el período anterior</span>';
             const diff = actual - anterior;
             if (Math.abs(diff) < 1e-9) return '<span style="color: var(--text-muted);">= igual que el período anterior</span>';
-            const mejora = diff > 0;
+
+            let mejora = diff > 0;
+            if (def.banda) {
+                const centro = (def.banda[0] + def.banda[1]) / 2;
+                mejora = Math.abs(actual - centro) < Math.abs(anterior - centro);
+            }
+
             const color = mejora ? 'var(--accent-teal)' : 'var(--danger)';
-            const flecha = mejora ? '▲' : '▼';
+            const flecha = diff > 0 ? '▲' : '▼';
             let texto;
             if (def.tipo === 'pct') {
                 texto = `${diff > 0 ? '+' : ''}${(diff * 100).toFixed(1)} pp`;
@@ -2918,7 +3101,7 @@
 
         async function cargarIndicadoresData() {
             const grid = document.getElementById('kpis-teal-grid');
-            grid.innerHTML = '<p style="color: var(--text-muted);">Calculando los 10 KPIs Teal (puede tardar unos segundos)...</p>';
+            grid.innerHTML = '<p style="color: var(--text-muted);">Calculando los KPIs Teal...</p>';
 
             const dias = parseInt(document.getElementById('filtro-kpi-periodo').value) || 30;
             const hasta = new Date();
@@ -2930,7 +3113,7 @@
             desdeAnt.setDate(desdeAnt.getDate() - (dias - 1));
 
             document.getElementById('kpi-info-periodo').innerText =
-                `Período: ${fechaAR(fechaLocalISO(desde))} → ${fechaAR(fechaLocalISO(hasta))}. Se compara contra ${fechaAR(fechaLocalISO(desdeAnt))} → ${fechaAR(fechaLocalISO(hastaAnt))}.`;
+                `Período: ${fechaAR(fechaLocalISO(desde))} → ${fechaAR(fechaLocalISO(hasta))}. Se compara contra ${fechaAR(fechaLocalISO(desdeAnt))} → ${fechaAR(fechaLocalISO(hastaAnt))}. Hacé clic en cualquier KPI para profundizar.`;
 
             try {
                 const [resAct, resAnt, metas, cal, mant, dem] = await Promise.all([
@@ -2967,8 +3150,6 @@
             const ant = cacheKpisTeal.anterior;
             const equipo = document.getElementById('filtro-kpi-equipo').value;
 
-            modoProductividadKg = (datoEquipo(act, 'PLANTA')?.llenados_con_peso || 0) > 0;
-
             grid.innerHTML = KPI_TEAL.map(def => tarjetaKpi(def, act, ant, equipo)).join('');
         }
 
@@ -2998,7 +3179,13 @@
             let colorValor = 'var(--text-main)';
             let barra = '';
             let lineaMeta = '<div class="kpi-sub">Sin meta definida · el equipo puede proponerla</div>';
-            if (meta && meta.valor) {
+
+            if (def.banda) {
+                colorValor = colorCarga(actual);
+                const ancho = actual === null ? 0 : Math.max(0, Math.min(100, (actual / 1.3) * 100));
+                barra = `<div class="meta-barra"><div style="width: ${ancho}%; background: ${colorValor};"></div></div>`;
+                lineaMeta = `<div class="kpi-sub">🎯 Banda sana ${fmtPct(def.banda[0])} – ${fmtPct(def.banda[1])}${meta && !meta.sugerida ? ` · meta propuesta ${formatearKpi(def, meta.valor)}` : ''}</div>`;
+            } else if (meta && meta.valor) {
                 const avance = actual !== null ? actual / meta.valor : null;
                 colorValor = avance === null ? 'var(--text-muted)' : (avance >= 1 ? 'var(--accent-teal)' : (avance >= 0.85 ? 'var(--warning)' : 'var(--danger)'));
                 const ancho = avance === null ? 0 : Math.max(0, Math.min(100, avance * 100));
@@ -3030,106 +3217,351 @@
                     ${serieHtml}
                     ${barra}
                     ${lineaMeta}
+                    <div class="kpi-sub" style="color: var(--accent-teal); text-align: right; margin-top: 6px;">Profundizar ➔</div>
                 </div>
             `;
         }
 
+        /* ===== DRILL-DOWN: navegación en profundidad dentro de cada KPI ===== */
+
+        let drillStack = [];
+
+        function periodoKpi() {
+            const p = cacheKpisTeal.actual?.periodo || {};
+            return {
+                desde: String(p.desde || fechaLocalISO()).substring(0, 10),
+                hasta: String(p.hasta || fechaLocalISO()).substring(0, 10)
+            };
+        }
+
+        // Arma "irDrill('equipo', 'oee', 'Azul')" escapando cada argumento para usar dentro de onclick="..."
+        function llamada(fn, ...args) {
+            return `${fn}(${args.map(a => `'${argJs(a)}'`).join(', ')})`;
+        }
+
+        function horasEntre(a, b) {
+            if (!a || !b) return null;
+            const h = (new Date(b) - new Date(a)) / 3600000;
+            return isNaN(h) || h < 0 ? null : h;
+        }
+
+        function etiquetaEquipo(eq) {
+            return eq === 'PLANTA' ? '🏭 Planta' : `Equipo ${eq}`;
+        }
+
+        function nombreMolde(m) {
+            return `#${m.n_molde ?? '--'} ${m.nombre || m.id_tag || ''}`;
+        }
+
+        function bloque(titulo, contenido) {
+            return `<div class="bloque-detalle"><h4>${titulo}</h4>${contenido}</div>`;
+        }
+
+        function statsHtml(items) {
+            return `<div class="foto-stats" style="margin-top: 0;">${items.map(([t, v, c]) => `
+                <div class="foto-stat">
+                    <div class="kpi-title">${t}</div>
+                    <div class="valor" style="color: ${c || 'var(--text-main)'}; font-size: 1.15rem;">${v ?? '--'}</div>
+                </div>`).join('')}</div>`;
+        }
+
+        function chipsDefectos(p) {
+            const defs = [
+                ['def_poros', 'Poros'], ['def_rebabas', 'Rebabas'], ['def_fisuras', 'Fisuras'],
+                ['def_descuadre', 'Descuadre'], ['def_cajas_danadas', 'Cajas dañadas'],
+                ['def_logo', 'Logo'], ['def_armadura', 'Armadura exp.']
+            ];
+            const t = defs.filter(([k]) => parseInt(p[k]) > 0).map(([, n]) => `<span class="defect-tag">${n}</span>`).join('');
+            return t || '<span class="badge badge-success">Sin defectos</span>';
+        }
+
+        function estadoProduccionHtml(p) {
+            if (p.llenado) return '<span class="badge badge-success">LLENADO</span>';
+            if (p.con_actividad) return '<span class="badge badge-warning">EN PROCESO</span>';
+            return '<span class="badge">SIN ACTIVIDAD</span>';
+        }
+
+        function etiquetaClase(clase) {
+            return {
+                DIRECTO_MOLDES: '🔧 Armador',
+                DIRECTO_HORMIGON: '🏗️ Llenado',
+                TERMINACION: '✨ Terminación',
+                RETRABAJO: '♻️ Retrabajo',
+                INDIRECTO: 'Indirecto'
+            }[clase] || clase || '--';
+        }
+
+        function tablaDrill(columnas, filas, onclickFila, vacio) {
+            if (!filas || filas.length === 0) {
+                return `<p style="color: var(--text-muted); margin: 0;">${vacio || 'Sin registros en el período.'}</p>`;
+            }
+            const conClick = typeof onclickFila === 'function';
+            return `
+                <div style="overflow-x: auto; max-height: 360px; overflow-y: auto;">
+                    <table class="table-teal" style="margin-top: 0;">
+                        <thead>
+                            <tr>${columnas.map(c => `<th>${c[0]}</th>`).join('')}${conClick ? '<th></th>' : ''}</tr>
+                        </thead>
+                        <tbody>
+                            ${filas.map(f => {
+                                const accion = conClick ? onclickFila(f) : null;
+                                const celdas = columnas.map(c => {
+                                    const v = c[1](f);
+                                    return `<td>${v === null || v === undefined || v === '' ? '--' : v}</td>`;
+                                }).join('');
+                                return `<tr${accion ? ` class="fila-interactiva" onclick="${accion}"` : ''}>${celdas}${conClick ? `<td style="color: var(--accent-teal); font-weight: 700;">${accion ? '➔' : ''}</td>` : ''}</tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        // Abre el KPI. Si la Mirada es un equipo, entra directo al nivel del equipo.
         function verDetalleKpi(id) {
             const def = KPI_TEAL.find(k => k.id === id);
             if (!def) return;
 
-            const act = cacheKpisTeal.actual;
-            const equipo = equipoMirada(def);
-            const etiquetaEquipo = equipo === 'PLANTA' ? 'Planta completa' : `Equipo ${equipo}`;
+            drillStack = [];
+            document.getElementById('modal-kpi-origen').style.display = 'flex';
 
-            document.getElementById('modal-kpi-titulo').innerText = `${def.n}. ${def.icono} ${def.titulo}`;
-            document.getElementById('modal-kpi-fuente').innerText = def.integracion ? 'Pendiente de integración' : etiquetaEquipo;
-
-            let html = `
-                <p style="margin-top: 0;">${def.descripcion}</p>
-                <div class="bloque-detalle">
-                    <h4>🧮 Cómo se calcula</h4>
-                    <p style="margin: 0;">${def.formula}</p>
-                    <p style="margin: 8px 0 0; color: var(--text-muted);"><small>Fuente: ${def.fuente}</small></p>
-                </div>
-            `;
-
-            if (def.integracion || (def.requiere && ['dato', 'parcial'].includes(def.estado(datoEquipo(act, equipo), act)))) {
-                html += `
-                    <div class="bloque-detalle" style="border-color: var(--warning);">
-                        <h4 style="color: var(--warning);">🛠️ Qué falta para tenerlo completo</h4>
-                        <p style="margin: 0;">${def.requiere}</p>
-                    </div>
-                `;
+            const mirada = document.getElementById('filtro-kpi-equipo').value;
+            if (!def.integracion && !def.global && def.columnas && mirada !== 'PLANTA' && cacheKpisTeal.actual) {
+                drillStack.push({ key: 'kpi', args: [id], miga: `${def.icono} ${def.titulo}` });
+                irDrill('equipo', id, mirada);
+            } else {
+                irDrill('kpi', id);
             }
+        }
 
-            if (!def.integracion && act) {
-                // Desglose por equipo (cada equipo contra sí mismo, sin ranking)
-                if (def.columnas) {
-                    const filas = (act.equipos || []).filter(e => e.equipo !== 'PLANTA');
-                    const planta = datoEquipo(act, 'PLANTA');
-                    html += `
-                        <div class="bloque-detalle">
-                            <h4>👥 Por equipo</h4>
-                            <div style="overflow-x: auto;">
-                                <table class="table-teal">
-                                    <thead>
-                                        <tr><th>Equipo</th>${def.columnas.map(c => `<th>${c[0]}</th>`).join('')}</tr>
-                                    </thead>
-                                    <tbody>
-                                        ${filas.map(e => `<tr${e.equipo === equipo ? ' style="background: rgba(16,185,129,0.08);"' : ''}><td><strong>${e.equipo}</strong></td>${def.columnas.map(c => `<td>${c[1](e)}</td>`).join('')}</tr>`).join('')}
-                                        ${planta ? `<tr style="border-top: 2px solid var(--accent-teal);"><td><strong>🏭 PLANTA</strong></td>${def.columnas.map(c => `<td>${c[1](planta)}</td>`).join('')}</tr>` : ''}
-                                    </tbody>
-                                </table>
-                            </div>
-                            ${def.id === 'oee' ? '<p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">* Sin inspecciones de desmolde asignables al equipo: se usa la calidad de planta.</small></p>' : ''}
-                        </div>
-                    `;
+        async function irDrill(key, ...args) {
+            drillStack.push({ key, args, miga: '…' });
+            await renderDrill();
+        }
+
+        async function volverDrill(indice) {
+            drillStack = drillStack.slice(0, parseInt(indice) + 1);
+            await renderDrill();
+        }
+
+        function migasHtml() {
+            if (drillStack.length <= 1) return '';
+            return `<div class="breadcrumb" style="margin-bottom: 14px; flex-wrap: wrap;">${drillStack.map((n, i) =>
+                i < drillStack.length - 1
+                    ? `<span class="breadcrumb-item" onclick="volverDrill(${i})">${n.miga}</span> <span>➔</span>`
+                    : `<span style="color: var(--text-main); font-weight: 700;">${n.miga}</span>`
+            ).join(' ')}</div>`;
+        }
+
+        async function renderDrill() {
+            const nivel = drillStack[drillStack.length - 1];
+            const body = document.getElementById('modal-kpi-body');
+            body.innerHTML = migasHtml() + '<p style="color: var(--text-muted);">Cargando detalle...</p>';
+
+            try {
+                const r = await DRILL[nivel.key](...nivel.args);
+                nivel.miga = r.miga;
+                document.getElementById('modal-kpi-titulo').innerText = r.titulo;
+                document.getElementById('modal-kpi-fuente').innerText = r.badge || '';
+                body.innerHTML = migasHtml() + r.html;
+                const caja = document.querySelector('#modal-kpi-origen .modal-box');
+                if (caja) caja.scrollTop = 0;
+            } catch (err) {
+                console.error('Error en el detalle del KPI:', err);
+                body.innerHTML = migasHtml() + `<p style="color: var(--danger);">❌ No se pudo cargar el detalle: ${err.message}</p>`;
+            }
+        }
+
+        // Cálculo de OEE de un día (fila de fn_kpi_dias)
+        function oeeDia(r) {
+            const d = ratio(r.molde_dias_activos, r.molde_dias_disp, true);
+            const re = ratio(r.sum_obj, r.sum_real, true);
+            const c = ratio(r.sin_defecto, r.inspeccionadas);
+            return (d === null || re === null || c === null) ? null : d * re * c;
+        }
+
+        // Columnas del nivel "día por día" según el KPI
+        const COLS_DIA = {
+            oee: [
+                ['Disponib.', r => fmtPct(ratio(r.molde_dias_activos, r.molde_dias_disp, true))],
+                ['Rendim.', r => fmtPct(ratio(r.sum_obj, r.sum_real, true))],
+                ['Calidad', r => fmtPct(ratio(r.sin_defecto, r.inspeccionadas))],
+                ['OEE', r => `<strong>${fmtPct(oeeDia(r))}</strong>`],
+                ['Ciclos', r => r.ciclos]
+            ],
+            giros: [
+                ['Moldes activos', r => r.molde_dias_disp],
+                ['Llenados', r => r.eventos_llenado],
+                ['Giros', r => `<strong>${fmtNum(ratio(r.eventos_llenado, r.molde_dias_disp), 2)}</strong>`]
+            ],
+            fpy: [
+                ['Inspeccionadas', r => r.inspeccionadas],
+                ['Sin defecto', r => r.sin_defecto],
+                ['FPY', r => `<strong>${fmtPct(ratio(r.sin_defecto, r.inspeccionadas))}</strong>`]
+            ],
+            plan: [
+                ['Programados', r => r.programados],
+                ['Llenados', r => r.llenados],
+                ['Cumplimiento', r => `<strong>${fmtPct(ratio(r.llenados, r.programados))}</strong>`]
+            ],
+            margen: [
+                ['Llenados', r => r.llenados],
+                ['Margen', r => fmtMoneda(r.margen)],
+                ['Margen/molde', r => `<strong>${fmtMoneda(ratio(r.margen, r.molde_dias_disp))}</strong>`]
+            ],
+            productividad: [
+                ['Armadores', r => `${r.dir_presentes ?? 0} / ${r.dir_esperados ?? 0}`],
+                ['Min disp.', r => fmtNum(r.min_disponibles, 0)],
+                ['Min ganados', r => fmtNum(r.min_ganados, 0)],
+                ['Eficiencia', r => `<strong>${fmtPct(ratio(r.min_ganados, r.min_disponibles))}</strong>`],
+                ['Moldes/armador', r => fmtNum(ratio(r.llenados, r.dir_presentes), 1)]
+            ],
+            capacidad: [
+                ['Asistencia', r => `${r.dir_presentes ?? 0} / ${r.dir_esperados ?? 0} (${fmtPct(ratio(r.dir_presentes, r.dir_esperados, true))})`],
+                ['Min disp.', r => fmtNum(r.min_disponibles, 0)],
+                ['Min planif.', r => fmtNum(r.min_planificados, 0)],
+                ['Carga', r => { const c = ratio(r.min_planificados, r.min_disponibles); return `<strong style="color: ${colorCarga(c)};">${fmtPct(c)}</strong>`; }],
+                ['Cap. perdida', r => `${fmtNum(Math.max(0, (num(r.min_disponibles_teoricos) || 0) - (num(r.min_disponibles) || 0)), 0)} min`]
+            ]
+        };
+
+        // Columnas, filtro y orden del nivel "molde por molde" según el KPI (de peor a mejor)
+        const COLS_MOLDE = {
+            oee: [
+                ['Días activo', m => m.dias_activo],
+                ['Ciclos', m => m.ciclos],
+                ['Rendim. (sin tope)', m => fmtPct(ratio(m.sum_obj, m.sum_real))],
+                ['Inspec.', m => m.inspeccionadas],
+                ['FPY', m => `<strong>${fmtPct(ratio(m.sin_defecto, m.inspeccionadas))}</strong>`],
+                ['Llenados', m => m.eventos_llenado]
+            ],
+            giros: [
+                ['Días activo', m => m.dias_activo],
+                ['Llenados', m => m.eventos_llenado],
+                ['Días con llenado', m => m.dias_con_llenado],
+                ['Giros', m => `<strong>${fmtNum(ratio(m.eventos_llenado, m.dias_activo), 2)}</strong>`]
+            ],
+            fpy: [
+                ['Inspeccionadas', m => m.inspeccionadas],
+                ['Sin defecto', m => m.sin_defecto],
+                ['FPY', m => `<strong>${fmtPct(ratio(m.sin_defecto, m.inspeccionadas))}</strong>`]
+            ],
+            plan: [
+                ['Programados', m => m.programados],
+                ['Llenados', m => m.llenados],
+                ['Cumplimiento', m => `<strong>${fmtPct(ratio(m.llenados, m.programados))}</strong>`]
+            ]
+        };
+        COLS_MOLDE.margen = COLS_MOLDE.plan;
+
+        const FILTRO_MOLDE = {
+            oee: m => m.ciclos > 0 || m.inspeccionadas > 0,
+            giros: m => m.dias_activo > 0,
+            fpy: m => m.inspeccionadas > 0,
+            plan: m => m.programados > 0,
+            margen: m => m.programados > 0
+        };
+
+        const ORDEN_MOLDE = {
+            oee: m => ratio(m.sin_defecto, m.inspeccionadas) ?? 2,
+            giros: m => ratio(m.eventos_llenado, m.dias_activo) ?? 2,
+            fpy: m => ratio(m.sin_defecto, m.inspeccionadas) ?? 2,
+            plan: m => ratio(m.llenados, m.programados) ?? 2,
+            margen: m => ratio(m.llenados, m.programados) ?? 2
+        };
+
+        // Bloque de capacidad de un día (fn_capacidad_dia), reutilizado en el nivel "día"
+        function bloqueCapacidadDia(capacidad, eq) {
+            const filas = capacidad.filter(c => eq === 'PLANTA' || c.equipo === eq || c.tipo === 'LLENADO');
+            return bloque('👥 Asistencia y capacidad del día', tablaDrill(
+                [
+                    ['Equipo', c => `<strong>${c.tipo === 'LLENADO' ? '🏗️ ' : ''}${c.equipo}</strong>`],
+                    ['Presentes', c => `${c.presentes} / ${c.esperados}${parseInt(c.sin_tag) > 0 ? ` <small style="color: var(--warning);">(+${c.sin_tag} sin tag)</small>` : ''}`],
+                    ['Min disp.', c => fmtNum(c.min_disponibles, 0)],
+                    ['Min planif.', c => c.tipo === 'MOLDES' ? fmtNum(c.min_planificados, 0) : '--'],
+                    ['Min ganados', c => c.tipo === 'MOLDES' ? fmtNum(c.min_ganados, 0) : '--'],
+                    ['Carga', c => { if (c.tipo !== 'MOLDES') return '--'; const x = ratio(c.min_planificados, c.min_disponibles); return `<strong style="color: ${colorCarga(x)};">${fmtPct(x)}</strong>`; }],
+                    ['Sin fichar', c => c.ausentes ? `<small style="color: var(--warning);">${c.ausentes}</small>` : '<small style="color: var(--accent-teal);">Todos presentes</small>']
+                ],
+                filas, null, 'No hay datos de asistencia para ese día.'
+            ));
+        }
+
+        const DRILL = {
+
+            // NIVEL 1: el KPI (por equipo, componentes, evolución y meta)
+            async kpi(id) {
+                const def = KPI_TEAL.find(k => k.id === id);
+                const act = cacheKpisTeal.actual;
+                const equipo = equipoMirada(def);
+                const etiqueta = equipo === 'PLANTA' ? 'Planta completa' : `Equipo ${equipo}`;
+
+                let html = `<p style="margin-top: 0;">${def.descripcion}</p>`;
+                html += bloque('🧮 Cómo se calcula', `<p style="margin: 0;">${def.formula}</p><p style="margin: 8px 0 0; color: var(--text-muted);"><small>Fuente: ${def.fuente}</small></p>`);
+
+                if (def.integracion || (def.requiere && act && ['dato', 'parcial'].includes(def.estado(datoEquipo(act, equipo), act)))) {
+                    html += `<div class="bloque-detalle" style="border-color: var(--warning);"><h4 style="color: var(--warning);">🛠️ Qué falta para tenerlo completo</h4><p style="margin: 0;">${def.requiere}</p></div>`;
                 }
 
-                // Pareto de defectos
-                if (def.id === 'fpy' && Array.isArray(act.pareto_defectos)) {
-                    const maxDef = Math.max(1, ...act.pareto_defectos.map(p => num(p.cantidad) || 0));
-                    html += `
-                        <div class="bloque-detalle">
-                            <h4>📊 Pareto de defectos (planta)</h4>
-                            ${act.pareto_defectos.map(p => `
-                                <div style="display: grid; grid-template-columns: 170px 1fr 40px; gap: 8px; align-items: center; margin: 4px 0;">
-                                    <span>${p.defecto}</span>
-                                    <div class="barra-pareto" style="width: ${((num(p.cantidad) || 0) / maxDef) * 100}%;"></div>
-                                    <strong>${p.cantidad}</strong>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                }
+                if (!def.integracion && act) {
+                    // Por equipo → clic para profundizar (Hormigón se muestra aparte)
+                    if (def.columnas) {
+                        const filas = [
+                            ...(act.equipos || []).filter(e => e.equipo !== 'PLANTA' && !/^hormig/i.test(e.equipo)),
+                            ...(act.equipos || []).filter(e => e.equipo === 'PLANTA')
+                        ].filter(e => !def.personas || e.equipo === 'PLANTA' || EQUIPOS_MOLDES.includes(e.equipo));
+                        html += bloque('👥 Por equipo',
+                            tablaDrill(
+                                [['Equipo', e => `<strong>${e.equipo === 'PLANTA' ? '🏭 PLANTA' : e.equipo}</strong>`], ...def.columnas],
+                                filas,
+                                e => llamada('irDrill', 'equipo', def.id, e.equipo)
+                            ) +
+                            `<p class="drill-hint">👆 Hacé clic en un equipo para ver sus días y ${def.personas ? 'sus armadores' : 'sus moldes'}.${def.id === 'oee' ? ' * Sin inspecciones asignables al equipo: se usa la calidad de planta.' : ''}</p>`
+                        );
+                    }
 
-                // Moldes ociosos
-                if (def.id === 'giros') {
-                    const ociosos = (act.moldes_ociosos || []).filter(m => equipo === 'PLANTA' || m.equipo === equipo);
-                    html += `
-                        <div class="bloque-detalle">
-                            <h4>😴 Moldes activos sin llenados en el período (${ociosos.length})</h4>
-                            ${ociosos.length === 0
+                    // Capacidad de llenado (equipo Hormigón)
+                    if (def.personas) {
+                        const pl = datoEquipo(act, 'PLANTA');
+                        html += bloque('🏗️ Equipo Hormigón (llenado de moldes)',
+                            statsHtml([
+                                ['Llenador-días', pl?.llen_presentes ?? '--'],
+                                ['Min disponibles', fmtNum(pl?.llen_min_disponibles, 0)],
+                                ['Moldes llenados', pl?.llenados ?? '--'],
+                                ['Moldes/llenador-día', fmtNum(pl?.llenados_por_llenador, 1), 'var(--accent-teal)']
+                            ]) + '<p class="drill-hint">Hormigón llena los moldes de todos los equipos: se mide aparte, con los llenados de toda la planta.</p>'
+                        );
+                    }
+
+                    // Pareto de defectos
+                    if (def.id === 'fpy' && Array.isArray(act.pareto_defectos)) {
+                        const maxDef = Math.max(1, ...act.pareto_defectos.map(p => num(p.cantidad) || 0));
+                        html += bloque('📊 Pareto de defectos (planta)', act.pareto_defectos.map(p => `
+                            <div style="display: grid; grid-template-columns: 170px 1fr 40px; gap: 8px; align-items: center; margin: 4px 0;">
+                                <span>${p.defecto}</span>
+                                <div class="barra-pareto" style="width: ${((num(p.cantidad) || 0) / maxDef) * 100}%;"></div>
+                                <strong>${p.cantidad}</strong>
+                            </div>`).join(''));
+                    }
+
+                    // Moldes ociosos → clic a la ficha del molde
+                    if (def.id === 'giros') {
+                        const ociosos = (act.moldes_ociosos || []).filter(m => equipo === 'PLANTA' || m.equipo === equipo);
+                        html += bloque(`😴 Moldes activos sin llenados en el período (${ociosos.length})`,
+                            ociosos.length === 0
                                 ? '<p style="margin: 0; color: var(--accent-teal);">Todos los moldes activos tuvieron al menos un llenado. 👏</p>'
-                                : `<div style="max-height: 220px; overflow-y: auto;">
-                                    <table class="table-teal">
-                                        <thead><tr><th>N°</th><th>Molde</th><th>Equipo</th><th>Tag</th></tr></thead>
-                                        <tbody>${ociosos.map(m => `<tr><td>#${m.n_molde ?? '--'}</td><td>${m.nombre}</td><td>${m.equipo}</td><td><code>${m.id_tag}</code></td></tr>`).join('')}</tbody>
-                                    </table>
-                                  </div>
-                                  <p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">¿Siguen siendo necesarios? Desactivarlos (Estado = NO) libera capital y espacio.</small></p>`}
-                        </div>
-                    `;
-                }
+                                : tablaDrill(
+                                    [['Molde', m => `<strong>${nombreMolde(m)}</strong>`], ['Equipo', m => m.equipo], ['Tag', m => `<code>${m.id_tag}</code>`]],
+                                    ociosos,
+                                    m => llamada('irDrill', 'molde', 'giros', m.id_tag, m.equipo)
+                                  ) + '<p class="drill-hint">¿Siguen siendo necesarios? Desactivarlos (Estado = NO) libera capital y espacio.</p>'
+                        );
+                    }
 
-                // Componentes de velocidad
-                if (def.id === 'velocidad' && act.velocidad) {
-                    const v = act.velocidad;
-                    html += `
-                        <div class="bloque-detalle">
-                            <h4>🔧 Componentes</h4>
-                            <table class="table-teal">
+                    // Velocidad: componentes y acceso a los casos
+                    if (def.id === 'velocidad' && act.velocidad) {
+                        const v = act.velocidad;
+                        html += bloque('🔧 Componentes', `
+                            <table class="table-teal" style="margin-top: 0;">
                                 <tbody>
                                     <tr><td>% cerrados en menos de 48 h</td><td><strong>${fmtPct(v.pct_48h)}</strong></td></tr>
                                     <tr><td>MTTR Mantenimiento</td><td>${fmtHoras(v.mttr_mant_h)}</td></tr>
@@ -3139,69 +3571,536 @@
                                     <tr><td>Casos cerrados en el período</td><td>${v.cerrados}</td></tr>
                                     <tr><td>Casos abiertos hoy</td><td>${v.abiertos_hoy}</td></tr>
                                 </tbody>
-                            </table>
-                        </div>
-                    `;
-                }
+                            </table>`);
+                        html += bloque('🔎 Ver los casos', tablaDrill(
+                            [['Tipo', x => `<strong>${x.t}</strong>`], ['Qué incluye', x => x.d]],
+                            [
+                                { k: 'MANTENIMIENTO', t: '⚙️ Mantenimiento', d: 'Órdenes de registro_mejoras' },
+                                { k: 'CALIDAD', t: '⚠️ Calidad', d: 'Incidencias de gestion_calidad' },
+                                { k: 'TODOS', t: '📋 Todos', d: 'Ambos tipos juntos' }
+                            ],
+                            x => llamada('irDrill', 'casos', x.k)
+                        ));
+                    }
 
-                // Componentes del Pulso Teal
-                if (def.id === 'pulso' && act.pulso) {
-                    const p = act.pulso;
-                    html += `
-                        <div class="bloque-detalle">
-                            <h4>🌱 Componentes del Pulso</h4>
-                            <table class="table-teal">
-                                <tbody>
-                                    <tr><td>🙋 Participación (personas que reportaron / activas)</td><td><strong>${fmtPct(p.participacion)}</strong> <small>(${p.personas_que_reportaron}/${p.personas_activas})</small></td></tr>
-                                    <tr><td>🤝 Toma rápida (casos tomados en menos de 24 h)</td><td><strong>${fmtPct(p.toma_rapida)}</strong></td></tr>
-                                    <tr><td>🏠 Presencia (persona-días fichados / esperados)</td><td><strong>${fmtPct(p.presencia)}</strong> <small>(${p.persona_dias} persona-días)</small></td></tr>
-                                    <tr><td>❤️ Cuidado (plantel fuera de ART o enfermedad)</td><td><strong>${fmtPct(p.cuidado)}</strong> <small>(${p.en_salud} de ${p.plantel})</small></td></tr>
-                                </tbody>
-                            </table>
-                            <p style="margin: 6px 0 0;"><small style="color: var(--text-muted);">Si baja la participación, el problema es cultural, no de producción: ningún tablero de planta lo detectaría.</small></p>
-                        </div>
-                    `;
-                }
+                    // Pulso: componentes → personas o casos
+                    if (def.id === 'pulso' && act.pulso) {
+                        const p = act.pulso;
+                        html += bloque('🌱 Componentes del Pulso', tablaDrill(
+                            [['Componente', x => `<strong>${x.n}</strong>`], ['Valor', x => `<strong>${x.v}</strong>`], ['Detalle', x => x.det]],
+                            [
+                                { k: 'participacion', n: '🙋 Participación (reportaron / activas)', v: fmtPct(p.participacion), det: `${p.personas_que_reportaron} de ${p.personas_activas}` },
+                                { k: 'toma', n: '🤝 Toma rápida (casos tomados en < 24 h)', v: fmtPct(p.toma_rapida), det: 'Ver casos' },
+                                { k: 'presencia', n: '🏠 Presencia (persona-días fichados / esperados)', v: fmtPct(p.presencia), det: `${p.persona_dias} persona-días · ${p.personas_con_tag ?? '--'} personas con tag` },
+                                { k: 'cuidado', n: '❤️ Cuidado (plantel fuera de ART o enfermedad)', v: fmtPct(p.cuidado), det: `${p.en_salud} de ${p.plantel}` }
+                            ],
+                            x => x.k === 'toma' ? llamada('irDrill', 'casos', 'TODOS') : llamada('irDrill', 'pulsoPersonas', x.k)
+                        ) + '<p class="drill-hint">👆 Clic en un componente para ver persona por persona. Si baja la participación, el problema es cultural, no de producción.</p>');
+                    }
 
-                // Evolución diaria
-                if (def.serie && Array.isArray(act.serie) && act.serie.length) {
-                    const ultimos = act.serie.slice(-14).reverse();
+                    // Evolución diaria → clic al día
+                    if (def.serie && Array.isArray(act.serie) && act.serie.length) {
+                        const ultimos = act.serie.filter(s => num(s[def.serie]) !== null).slice(-14).reverse();
+                        html += bloque(`📈 Evolución diaria (planta, últimos ${ultimos.length} días con datos)`,
+                            tablaDrill(
+                                [['Fecha', s => `${diaSemana(s.fecha)} ${fechaAR(s.fecha)}`], [def.titulo, s => {
+                                    const v = num(s[def.serie]);
+                                    return `<strong style="color: ${def.banda ? colorCarga(v) : 'inherit'};">${formatearKpi(def, v)}</strong>`;
+                                }]],
+                                ultimos,
+                                s => llamada('irDrill', 'dia', def.id, 'PLANTA', s.fecha)
+                            ));
+                    }
+
+                    // Meta propuesta por el equipo
+                    const meta = metaKpi(def, equipo);
+                    const valorInput = meta && meta.valor != null ? (def.tipo === 'pct' ? (meta.valor * 100).toFixed(1) : meta.valor) : '';
                     html += `
-                        <div class="bloque-detalle">
-                            <h4>📈 Evolución diaria (planta, últimos ${ultimos.length} días con datos)</h4>
-                            <div style="max-height: 220px; overflow-y: auto;">
-                                <table class="table-teal">
-                                    <thead><tr><th>Fecha</th><th>${def.titulo}</th></tr></thead>
-                                    <tbody>${ultimos.map(s => `<tr><td>${diaSemana(s.fecha)} ${fechaAR(s.fecha)}</td><td>${formatearKpi(def, num(s[def.serie]))}</td></tr>`).join('')}</tbody>
-                                </table>
+                        <div class="bloque-detalle" style="border-color: var(--accent-teal);">
+                            <h4>🎯 Meta de ${etiqueta}</h4>
+                            <p style="margin: 0 0 8px; color: var(--text-muted);"><small>En una organización Teal la meta la propone el propio equipo. ${meta && !meta.sugerida ? `Meta actual propuesta${meta.autor ? ' por ' + meta.autor : ''}${meta.comentario ? ': "' + meta.comentario + '"' : ''}.` : 'Todavía no hay meta propuesta.'}</small></p>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <input type="number" id="meta-valor" step="0.1" style="width: 120px;" placeholder="${def.tipo === 'pct' ? 'Ej: 85' : 'Valor'}" value="${valorInput}">
+                                <span style="color: var(--text-muted);">${def.tipo === 'pct' ? '%' : unidadKpi(def)}</span>
+                                <input type="text" id="meta-autor" style="flex: 1; min-width: 160px;" placeholder="Propuesta por (equipo o persona)" value="${meta && !meta.sugerida && meta.autor ? meta.autor : ''}">
+                                <input type="text" id="meta-comentario" style="flex: 2; min-width: 200px;" placeholder="¿Por qué esta meta?" value="${meta && !meta.sugerida && meta.comentario ? meta.comentario : ''}">
+                                <button class="btn" onclick="guardarMetaKpi('${def.id}')">Guardar meta</button>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                 }
 
-                // Meta propuesta por el equipo
-                const meta = metaKpi(def, equipo);
-                const valorInput = meta && meta.valor != null
-                    ? (def.tipo === 'pct' ? (meta.valor * 100).toFixed(1) : meta.valor)
-                    : '';
-                html += `
-                    <div class="bloque-detalle" style="border-color: var(--accent-teal);">
-                        <h4>🎯 Meta de ${etiquetaEquipo}</h4>
-                        <p style="margin: 0 0 8px; color: var(--text-muted);"><small>En una organización Teal la meta la propone el propio equipo. ${meta && !meta.sugerida ? `Meta actual propuesta${meta.autor ? ' por ' + meta.autor : ''}${meta.comentario ? ': "' + meta.comentario + '"' : ''}.` : 'Todavía no hay meta propuesta.'}</small></p>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                            <input type="number" id="meta-valor" step="0.1" style="width: 120px;" placeholder="${def.tipo === 'pct' ? 'Ej: 85' : 'Valor'}" value="${valorInput}">
-                            <span style="color: var(--text-muted);">${def.tipo === 'pct' ? '%' : unidadKpi(def)}</span>
-                            <input type="text" id="meta-autor" style="flex: 1; min-width: 160px;" placeholder="Propuesta por (equipo o persona)" value="${meta && !meta.sugerida && meta.autor ? meta.autor : ''}">
-                            <input type="text" id="meta-comentario" style="flex: 2; min-width: 200px;" placeholder="¿Por qué esta meta?" value="${meta && !meta.sugerida && meta.comentario ? meta.comentario : ''}">
-                            <button class="btn" onclick="guardarMetaKpi('${def.id}')">Guardar meta</button>
-                        </div>
-                    </div>
-                `;
-            }
+                return {
+                    miga: `${def.icono} ${def.titulo}`,
+                    titulo: `${def.n}. ${def.icono} ${def.titulo}`,
+                    badge: def.integracion ? 'Pendiente de integración' : etiqueta,
+                    html
+                };
+            },
 
-            document.getElementById('modal-kpi-body').innerHTML = html;
-            document.getElementById('modal-kpi-origen').style.display = 'flex';
-        }
+            // NIVEL 2: un equipo (o la planta) → día por día + moldes o personas
+            async equipo(id, eq) {
+                const def = KPI_TEAL.find(k => k.id === id);
+                const { desde, hasta } = periodoKpi();
+                const esPersonas = !!def.personas;
+
+                const [dias, moldes, personas] = await Promise.all([
+                    rpcJson('fn_kpi_dias', { p_desde: desde, p_hasta: hasta, p_equipo: eq }),
+                    esPersonas ? Promise.resolve([]) : rpcJson('fn_kpi_moldes', { p_desde: desde, p_hasta: hasta, p_equipo: eq }),
+                    esPersonas ? rpcJson('fn_kpi_personas', { p_desde: desde, p_hasta: hasta, p_equipo: eq }) : Promise.resolve([])
+                ]);
+
+                const act = cacheKpisTeal.actual;
+                const e = datoEquipo(act, eq);
+                const valor = num(def.valor(e, act));
+                const diasLab = act?.periodo?.dias_laborables || 1;
+
+                let html = statsHtml([
+                    [def.titulo, `${formatearKpi(def, valor)} <small style="font-size: 0.7rem; color: var(--text-muted);">${unidadKpi(def)}</small>`, def.banda ? colorCarga(valor) : 'var(--accent-teal)'],
+                    ['Período', `${fechaAR(desde)} → ${fechaAR(hasta)}`],
+                    ['Mirada', etiquetaEquipo(eq)],
+                    ...(esPersonas ? [['Días laborables', diasLab]] : [])
+                ]);
+
+                // Día por día
+                const colsDia = COLS_DIA[id] || COLS_DIA.plan;
+                const diasRel = dias.filter(r =>
+                    (parseInt(r.programados) || 0) + (parseInt(r.ciclos) || 0) + (parseInt(r.inspeccionadas) || 0) +
+                    (num(r.horas) || 0) + (parseInt(r.eventos_llenado) || 0) + (num(r.min_disponibles) || 0) > 0
+                );
+                html += bloque(`📅 Día por día (${diasRel.length})`,
+                    tablaDrill(
+                        [['Fecha', r => `<strong>${diaSemana(r.fecha)} ${fechaAR(r.fecha)}</strong>`], ...colsDia],
+                        diasRel,
+                        r => llamada('irDrill', 'dia', id, eq, r.fecha),
+                        'No hay días con datos en el período.'
+                    ) + `<p class="drill-hint">👆 Clic en un día para ver ${esPersonas ? 'quién vino, quién faltó y' : ''} molde por molde qué pasó.</p>`
+                );
+
+                if (!esPersonas) {
+                    // Molde por molde, de peor a mejor
+                    const filtro = FILTRO_MOLDE[id] || (() => true);
+                    const orden = ORDEN_MOLDE[id] || (() => 0);
+                    const lista = moldes.filter(filtro).sort((a, b) => orden(a) - orden(b));
+                    const cols = [
+                        ['Molde', m => `<strong>${nombreMolde(m)}</strong>`],
+                        ...(eq === 'PLANTA' ? [['Equipo', m => m.equipo]] : []),
+                        ...(COLS_MOLDE[id] || COLS_MOLDE.plan)
+                    ];
+                    html += bloque(`🧱 Molde por molde (${lista.length}) · de peor a mejor`,
+                        tablaDrill(cols, lista, m => llamada('irDrill', 'molde', id, m.id_tag, eq), 'No hay moldes con datos en el período.') +
+                        '<p class="drill-hint">👆 Clic en un molde para abrir su ficha: cada ciclo, cada pieza y cada llenado.</p>'
+                    );
+                } else {
+                    // Armadores del equipo (y llenadores si es la planta), de menor a mayor presencia
+                    const lista = personas
+                        .filter(p => ['DIRECTO_MOLDES', 'DIRECTO_HORMIGON'].includes(p.clase) && (p.estado === 'Activo' || num(p.horas) > 0))
+                        .filter(p => eq === 'PLANTA' || p.clase === 'DIRECTO_MOLDES')
+                        .sort((a, b) => (parseInt(a.dias_presente) || 0) - (parseInt(b.dias_presente) || 0));
+                    html += bloque(`👤 ${eq === 'PLANTA' ? 'Armadores y llenadores' : 'Armadores/desarmadores'} (${lista.length})`,
+                        tablaDrill(
+                            [
+                                ['Persona', p => `<strong>${p.nombre}</strong>${p.con_tag ? '' : ' <small style="color: var(--warning);">(sin tag)</small>'}`],
+                                ...(eq === 'PLANTA' ? [['Equipo', p => p.equipo]] : []),
+                                ['Puesto', p => p.puesto || '--'],
+                                ['Categoría', p => p.categoria || '--'],
+                                ['Rol', p => etiquetaClase(p.clase)],
+                                ['Días presentes', p => `${p.dias_presente} / ${diasLab}`],
+                                ['Presencia', p => fmtPct(Math.min(1, (parseInt(p.dias_presente) || 0) / diasLab))],
+                                ['Horas', p => fmtNum(p.horas, 1)]
+                            ],
+                            lista,
+                            p => llamada('irDrill', 'persona', p.token, p.nombre),
+                            'No hay armadores clasificados para este equipo. Revisá equipo y puesto en Personas.'
+                        ) + '<p class="drill-hint">👆 Clic en una persona para ver su fichada día por día. La idea es entender la capacidad del equipo, no controlar a nadie.</p>'
+                    );
+                }
+
+                return {
+                    miga: etiquetaEquipo(eq),
+                    titulo: `${def.icono} ${def.titulo} · ${etiquetaEquipo(eq)}`,
+                    badge: `${fechaAR(desde)} → ${fechaAR(hasta)}`,
+                    html
+                };
+            },
+
+            // NIVEL 3: un día → asistencia, molde por molde y piezas o personas según el KPI
+            async dia(id, eq, fecha) {
+                const def = KPI_TEAL.find(k => k.id === id);
+                const verPiezas = ['oee', 'fpy'].includes(id);
+                const verCapacidad = !!def.personas;
+
+                const [prod, piezas, capacidad, personas] = await Promise.all([
+                    rpcJson('fn_kpi_produccion_detalle', { p_desde: fecha, p_hasta: fecha, p_equipo: eq }),
+                    verPiezas ? rpcJson('fn_kpi_piezas', { p_desde: fecha, p_hasta: fecha, p_equipo: eq }) : Promise.resolve([]),
+                    verCapacidad ? rpcJson('fn_capacidad_dia', { p_fecha: fecha }) : Promise.resolve([]),
+                    verCapacidad ? rpcJson('fn_kpi_personas', { p_desde: fecha, p_hasta: fecha, p_equipo: eq }) : Promise.resolve([])
+                ]);
+
+                const llenados = prod.filter(p => p.llenado).length;
+                const enProceso = prod.filter(p => !p.llenado && p.con_actividad).length;
+                const sinActividad = prod.filter(p => !p.con_actividad).length;
+                const pct = prod.length ? llenados / prod.length : null;
+                const piezasOk = piezas.filter(p => parseInt(p.total_defectos) === 0).length;
+
+                let html = statsHtml([
+                    ['Programados', prod.length, 'var(--blue-info)'],
+                    ['Llenados', llenados, 'var(--accent-teal)'],
+                    ['Cumplimiento', fmtPct(pct), colorCumplimiento(pct === null ? null : pct * 100)],
+                    ['En proceso', enProceso, 'var(--warning)'],
+                    ['Sin actividad', sinActividad, 'var(--text-muted)'],
+                    ...(verPiezas ? [['FPY del día', fmtPct(ratio(piezasOk, piezas.length)), 'var(--accent-teal)']] : [])
+                ]);
+
+                if (verCapacidad) html += bloqueCapacidadDia(capacidad, eq);
+
+                const ordenEstado = p => p.llenado ? 2 : (p.con_actividad ? 1 : 0);
+                const prodOrdenada = [...prod].sort((a, b) => ordenEstado(a) - ordenEstado(b));
+
+                const bloqueProd = bloque(`🧱 Molde por molde (${prod.length}) · primero lo que no se completó`,
+                    tablaDrill(
+                        [
+                            ['Molde', p => `<strong>#${p.n_molde ?? '--'}</strong> ${p.producto || ''}`],
+                            ...(eq === 'PLANTA' ? [['Equipo', p => p.equipo]] : []),
+                            ['🔓 Des', p => horaCorta(p.hora_desarmado)],
+                            ['🔒 Arm', p => horaCorta(p.hora_armado)],
+                            ['🧱 Lle', p => horaCorta(p.hora_llenado)],
+                            ['Estado', p => estadoProduccionHtml(p)]
+                        ],
+                        prodOrdenada,
+                        p => p.id_tag ? llamada('irDrill', 'molde', id, p.id_tag, eq) : null,
+                        'No hay moldes programados ese día.'
+                    ) + '<p class="drill-hint">👆 Clic en un molde para abrir su ficha. Sin flecha: el molde no pudo identificarse en planificacion_moldes.</p>'
+                );
+
+                const bloquePiezas = verPiezas ? bloque(`💎 Piezas inspeccionadas (${piezas.length})`,
+                    tablaDrill(
+                        [
+                            ['Molde', p => `<strong>#${p.n_molde ?? '--'}</strong> ${p.modelo || ''}`],
+                            ...(eq === 'PLANTA' ? [['Equipo', p => p.equipo]] : []),
+                            ['Defectos', p => chipsDefectos(p)]
+                        ],
+                        piezas,
+                        p => p.id_tag ? llamada('irDrill', 'molde', id, p.id_tag, eq) : null,
+                        'No hubo inspecciones de desmolde ese día.'
+                    )
+                ) : '';
+
+                const presentes = personas.filter(p => (parseInt(p.dias_presente) || 0) > 0 && ['DIRECTO_MOLDES', 'DIRECTO_HORMIGON'].includes(p.clase));
+                const bloquePersonas = verCapacidad ? bloque(`👤 Directos que ficharon (${presentes.length})`,
+                    tablaDrill(
+                        [
+                            ['Persona', p => `<strong>${p.nombre}</strong>`],
+                            ...(eq === 'PLANTA' ? [['Equipo', p => p.equipo]] : []),
+                            ['Puesto', p => p.puesto || '--'],
+                            ['Horas', p => fmtNum(p.horas, 1)]
+                        ],
+                        presentes.sort((a, b) => (num(b.horas) || 0) - (num(a.horas) || 0)),
+                        p => llamada('irDrill', 'persona', p.token, p.nombre),
+                        'Ningún directo fichó ese día.'
+                    )
+                ) : '';
+
+                html += id === 'fpy' ? bloquePiezas + bloqueProd : bloqueProd + bloquePiezas + bloquePersonas;
+
+                return {
+                    miga: `📅 ${diaSemana(fecha)} ${fechaAR(fecha)}`,
+                    titulo: `${def.icono} ${def.titulo} · ${etiquetaEquipo(eq)} · ${diaSemana(fecha)} ${fechaAR(fecha)}`,
+                    badge: fechaAR(fecha),
+                    html
+                };
+            },
+
+            // NIVEL 4: ficha del molde → cada ciclo, cada pieza, cada llenado
+            async molde(id, tag, eq) {
+                const { desde, hasta } = periodoKpi();
+                const tagU = String(tag || '').trim().toUpperCase();
+
+                const [ciclosTodos, piezas, llenDias, prod] = await Promise.all([
+                    rpcJson('fn_ciclos_unificados', { p_desde: desde, p_hasta: hasta }),
+                    rpcJson('fn_kpi_piezas', { p_desde: desde, p_hasta: hasta, p_equipo: 'PLANTA', p_id_tag: tag }),
+                    rpcJson('fn_kpi_molde_dias', { p_desde: desde, p_hasta: hasta, p_id_tag: tag }),
+                    rpcJson('fn_kpi_produccion_detalle', { p_desde: desde, p_hasta: hasta, p_equipo: 'PLANTA', p_id_tag: tag })
+                ]);
+
+                const ciclos = ciclosTodos
+                    .filter(c => String(c.id_tag || '').trim().toUpperCase() === tagU)
+                    .sort((a, b) => `${b.fecha}${b.hora_desarmado || ''}`.localeCompare(`${a.fecha}${a.hora_desarmado || ''}`));
+
+                const plan = cacheMoldesPlanificacion.find(m => String(m.id_tag || '').trim().toUpperCase() === tagU);
+                const nombre = plan ? `#${plan.n_molde ?? '--'} ${plan.nombre_simplificado || tag}` : (ciclos[0] ? `#${ciclos[0].n_molde} ${ciclos[0].producto}` : tag);
+
+                const reales = ciclos.map(c => num(c.tiempo_ciclo_min)).filter(v => v !== null);
+                const realProm = reales.length ? reales.reduce((a, b) => a + b, 0) / reales.length : null;
+                const ordenados = [...reales].sort((a, b) => a - b);
+                const mediana = ordenados.length ? ordenados[Math.floor(ordenados.length / 2)] : null;
+                const objetivo = num(plan?.ciclo_min) ?? num(ciclos[0]?.tiempo_objetivo_min);
+                const piezasOk = piezas.filter(p => parseInt(p.total_defectos) === 0).length;
+                const totalLlen = llenDias.reduce((a, d) => a + (parseInt(d.eventos_llenado) || 0), 0);
+                const prodLlen = prod.filter(p => p.llenado).length;
+
+                let html = `<p style="margin-top: 0; color: var(--text-muted);"><small>🏷️ Tag <code>${tag}</code> · ${plan ? `Familia ${plan.Familia || '--'} · Equipo ${plan.Equipo || '--'} · Estado ${plan.Estado || '--'}` : 'Sin datos en planificacion_moldes'}</small></p>`;
+                html += statsHtml([
+                    ['Ciclos medidos', ciclos.length],
+                    ['Real promedio', fmtMin(realProm), 'var(--warning)'],
+                    ['Real mediana', fmtMin(mediana)],
+                    ['Objetivo (ciclo_min)', fmtMin(objetivo), 'var(--blue-info)'],
+                    ['FPY', fmtPct(ratio(piezasOk, piezas.length)), 'var(--accent-teal)'],
+                    ['Llenados RFID', totalLlen],
+                    ['Plan cumplido', `${prodLlen}/${prod.length}`]
+                ]);
+
+                const secciones = {
+                    ciclos: bloque(`⏱️ Ciclos Desarmado ➔ Armado (${ciclos.length})`, tablaDrill(
+                        [
+                            ['Fecha', c => `${diaSemana(c.fecha)} ${fechaAR(c.fecha)}`],
+                            ['🔓 Des', c => horaCorta(c.hora_desarmado)],
+                            ['🔒 Arm', c => horaCorta(c.hora_armado)],
+                            ['Real', c => `<strong>${fmtMin(c.tiempo_ciclo_min)}</strong>`],
+                            ['Objetivo', c => fmtMin(c.tiempo_objetivo_min)],
+                            ['Desvío', c => {
+                                const d = num(c.desvio_min);
+                                return `<span style="color: ${d === null ? 'var(--text-muted)' : (d > 0 ? 'var(--warning)' : 'var(--accent-teal)')};">${fmtDesvio(c.desvio_min)}</span>`;
+                            }],
+                            ['Fuente', c => fuenteHtml(c.fuente)]
+                        ],
+                        ciclos, null, 'No hay ciclos medidos en el período.'
+                    )),
+                    piezas: bloque(`💎 Piezas inspeccionadas (${piezas.length}) · ${piezasOk} sin defecto`, tablaDrill(
+                        [
+                            ['Fecha', p => `${diaSemana(p.fecha)} ${fechaAR(p.fecha)}`],
+                            ['Modelo', p => p.modelo || '--'],
+                            ['Defectos', p => chipsDefectos(p)]
+                        ],
+                        piezas, null, 'No hay inspecciones de desmolde para este molde en el período.'
+                    )),
+                    llenados: bloque(`🔄 Llenados por día (antena)`, tablaDrill(
+                        [
+                            ['Fecha', d => `${diaSemana(d.fecha)} ${fechaAR(d.fecha)}`],
+                            ['Llenados', d => parseInt(d.eventos_llenado) > 0 ? `<strong>${d.eventos_llenado}</strong>` : '<span style="color: var(--danger);">0</span>']
+                        ],
+                        llenDias, null, 'Sin registros diarios (el molde no estuvo activo o no se recalcularon esos días).'
+                    )),
+                    prod: bloque(`📋 Producción planificada (${prod.length})`, tablaDrill(
+                        [
+                            ['Fecha', p => `${diaSemana(p.fecha)} ${fechaAR(p.fecha)}`],
+                            ['Producto', p => p.producto || '--'],
+                            ['🔓 Des', p => horaCorta(p.hora_desarmado)],
+                            ['🔒 Arm', p => horaCorta(p.hora_armado)],
+                            ['🧱 Lle', p => horaCorta(p.hora_llenado)],
+                            ['Estado', p => estadoProduccionHtml(p)]
+                        ],
+                        prod, null, 'No hay filas en el histórico para este molde.'
+                    ))
+                };
+
+                const orden = {
+                    giros: ['llenados', 'prod', 'ciclos', 'piezas'],
+                    fpy: ['piezas', 'ciclos', 'prod', 'llenados'],
+                    plan: ['prod', 'ciclos', 'llenados', 'piezas'],
+                    margen: ['prod', 'ciclos', 'llenados', 'piezas'],
+                    productividad: ['prod', 'ciclos', 'llenados', 'piezas'],
+                    capacidad: ['prod', 'ciclos', 'llenados', 'piezas'],
+                    oee: ['ciclos', 'piezas', 'prod', 'llenados']
+                }[id] || ['ciclos', 'piezas', 'prod', 'llenados'];
+
+                html += orden.map(k => secciones[k]).join('');
+
+                return {
+                    miga: `🧱 ${nombre}`,
+                    titulo: `🧱 Ficha del Molde ${nombre}`,
+                    badge: `${fechaAR(desde)} → ${fechaAR(hasta)}`,
+                    html
+                };
+            },
+
+            // NIVEL 2 (Velocidad / Pulso): lista de casos
+            async casos(tipo) {
+                const { desde, hasta } = periodoKpi();
+                const enPeriodo = f => { const s = String(f || '').substring(0, 10); return s >= desde && s <= hasta; };
+
+                const mant = tipo !== 'CALIDAD' ? cacheMantenimiento.map(m => ({
+                    tipo: 'MANTENIMIENTO', id: m.id, desc: m.descripcion, estado: m.estado || 'Abierta',
+                    creado: m.fecha_creacion, tomado: m.fecha_toma, cerrado: m.fecha_cierre, quien: m["Nombre y Apellido"]
+                })) : [];
+                const cal = tipo !== 'MANTENIMIENTO' ? cacheCalidad.map(c => ({
+                    tipo: 'CALIDAD', id: c.id, desc: c.descripcion_problema, estado: c.estado || 'Abierto',
+                    creado: c.fecha_reporte, tomado: c.fecha_toma_caso, cerrado: c.fecha_resolucion, quien: c.auditor
+                })) : [];
+
+                const casos = [...mant, ...cal]
+                    .filter(c => enPeriodo(c.creado) || enPeriodo(c.cerrado))
+                    .sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
+
+                const cerrados = casos.filter(c => c.cerrado);
+                const en48 = cerrados.filter(c => (horasEntre(c.creado, c.cerrado) ?? 999) <= 48).length;
+                const cerradosSinFecha = casos.filter(c => !c.cerrado && /final|cerrad|resuel/i.test(c.estado)).length;
+
+                let html = statsHtml([
+                    ['Casos en el período', casos.length],
+                    ['Cerrados con fecha', cerrados.length, 'var(--accent-teal)'],
+                    ['Cerrados en < 48 h', fmtPct(ratio(en48, cerrados.length)), 'var(--accent-teal)'],
+                    ['Cerrados SIN fecha', cerradosSinFecha, cerradosSinFecha ? 'var(--warning)' : 'var(--text-muted)']
+                ]);
+
+                if (cerradosSinFecha) {
+                    html += `<div class="aviso-secuencia" style="margin-top: 10px;">⚠️ Hay ${cerradosSinFecha} casos marcados como cerrados que no tienen fecha de cierre: no pueden medirse. Los triggers de sellado de fechas lo corrigen hacia adelante.</div>`;
+                }
+
+                html += bloque(`📋 Casos (${casos.length})`, tablaDrill(
+                    [
+                        ['Tipo', c => c.tipo === 'MANTENIMIENTO' ? '⚙️ Mant.' : '⚠️ Calidad'],
+                        ['Descripción', c => String(c.desc || '--').substring(0, 70)],
+                        ['Estado', c => c.estado],
+                        ['Reportado', c => fechaAR(c.creado)],
+                        ['Toma', c => fmtHoras(horasEntre(c.creado, c.tomado))],
+                        ['Resolución', c => fmtHoras(horasEntre(c.creado, c.cerrado))]
+                    ],
+                    casos,
+                    c => llamada('irDrill', 'caso', c.tipo, c.id),
+                    'No hay casos en el período.'
+                ) + '<p class="drill-hint">👆 Clic en un caso para ver su ficha completa.</p>');
+
+                const etiqueta = { MANTENIMIENTO: '⚙️ Mantenimiento', CALIDAD: '⚠️ Calidad', TODOS: '📋 Todos los casos' }[tipo] || tipo;
+                return { miga: etiqueta, titulo: `⚡ Casos · ${etiqueta}`, badge: `${fechaAR(desde)} → ${fechaAR(hasta)}`, html };
+            },
+
+            // NIVEL 3: un caso
+            async caso(tipo, id) {
+                const esMant = tipo === 'MANTENIMIENTO';
+                const r = esMant
+                    ? cacheMantenimiento.find(m => String(m.id) === String(id))
+                    : cacheCalidad.find(c => String(c.id) === String(id));
+                if (!r) throw new Error('No se encontró el caso en memoria. Recargá los indicadores.');
+
+                const creado = esMant ? r.fecha_creacion : r.fecha_reporte;
+                const tomado = esMant ? r.fecha_toma : r.fecha_toma_caso;
+                const cerrado = esMant ? r.fecha_cierre : r.fecha_resolucion;
+                const foto = esMant ? r.url_foto : r.archivo_url;
+                const f = v => v ? new Date(v).toLocaleString('es-AR') : '<span style="color: var(--warning);">Sin fecha registrada</span>';
+
+                let html = statsHtml([
+                    ['Estado', r.estado || (esMant ? 'Abierta' : 'Abierto')],
+                    ['Hasta tomarlo', fmtHoras(horasEntre(creado, tomado)), 'var(--warning)'],
+                    ['Hasta cerrarlo', fmtHoras(horasEntre(creado, cerrado)), 'var(--accent-teal)']
+                ]);
+
+                html += bloque('📝 Detalle', `
+                    <p style="margin: 0 0 6px;"><strong>${esMant ? 'Descripción de la falla' : 'Problema'}:</strong> ${esMant ? (r.descripcion || '--') : (r.descripcion_problema || '--')}</p>
+                    ${esMant
+                        ? `<p style="margin: 0 0 6px;"><strong>Área:</strong> ${r.area || '--'} · <strong>Urgencia:</strong> ${r.urgencia || 'Normal'} · <strong>Informante:</strong> ${r["Nombre y Apellido"] || 'Anónimo'}</p>`
+                        : `<p style="margin: 0 0 6px;"><strong>Auditor:</strong> ${r.auditor || '--'} · <strong>Operario:</strong> ${r.operario || '--'} · <strong>Responsable:</strong> ${r.responsable_calidad || 'Sin asignar'}</p>`}
+                    ${(esMant ? r.comentario_cierre : r.comentario_mejora) ? `<p style="margin: 0;"><strong>Comentario de cierre:</strong> ${esMant ? r.comentario_cierre : r.comentario_mejora}</p>` : ''}
+                `);
+
+                html += bloque('🕒 Línea de tiempo', `
+                    <div class="timeline" style="margin: 4px 0;">
+                        <div class="timeline-item active"><strong>Reportado:</strong> ${f(creado)}</div>
+                        <div class="timeline-item ${tomado ? 'active' : ''}"><strong>Tomado:</strong> ${f(tomado)}</div>
+                        <div class="timeline-item ${cerrado ? 'active' : ''}"><strong>Cerrado:</strong> ${f(cerrado)}</div>
+                    </div>`);
+
+                if (foto) html += `<img src="${foto}" class="img-preview-modal" alt="Foto del caso">`;
+
+                return {
+                    miga: `${esMant ? '⚙️ OT' : '⚠️ Caso'} #${String(id).substring(0, 8)}`,
+                    titulo: `${esMant ? '⚙️ Mantenimiento' : '⚠️ Calidad'} · Caso #${id}`,
+                    badge: r.estado || '',
+                    html
+                };
+            },
+
+            // NIVEL 2 (Pulso): personas según el componente
+            async pulsoPersonas(comp) {
+                const { desde, hasta } = periodoKpi();
+                const diasLab = cacheKpisTeal.actual?.periodo?.dias_laborables || 1;
+                const todas = await rpcJson('fn_kpi_personas', { p_desde: desde, p_hasta: hasta, p_equipo: 'PLANTA' });
+
+                let lista = todas.filter(p => comp === 'cuidado' || p.estado === 'Activo');
+                if (comp === 'presencia') lista = lista.filter(p => p.con_tag);
+
+                const ordenes = {
+                    participacion: (a, b) => (parseInt(b.reportes) || 0) - (parseInt(a.reportes) || 0),
+                    presencia: (a, b) => (parseInt(a.dias_presente) || 0) - (parseInt(b.dias_presente) || 0),
+                    cuidado: (a, b) => (a.estado === 'Activo' ? 1 : 0) - (b.estado === 'Activo' ? 1 : 0)
+                };
+                lista.sort(ordenes[comp] || (() => 0));
+
+                const titulos = {
+                    participacion: '🙋 Participación: quién reporta mejoras e incidencias',
+                    presencia: '🏠 Presencia: días fichados vs. días laborables (solo personas con tag)',
+                    cuidado: '❤️ Cuidado: estado del plantel'
+                };
+
+                const reportaron = lista.filter(p => (parseInt(p.reportes) || 0) > 0).length;
+                let html = statsHtml([
+                    ['Personas', lista.length],
+                    ['Días laborables', diasLab],
+                    ['Reportaron algo', reportaron, 'var(--accent-teal)'],
+                    ['En ART / enfermas', lista.filter(p => ['ART', 'Enfermo'].includes(p.estado)).length, 'var(--warning)']
+                ]);
+
+                if (comp === 'participacion' && reportaron === 0) {
+                    html += `<div class="aviso-secuencia" style="margin-top: 10px;">⚠️ Nadie aparece como reportante: los nombres cargados en mejoras y calidad no coinciden con Personas. Lo ideal es que la App guarde el persona_id de quien reporta.</div>`;
+                }
+
+                html += bloque(titulos[comp] || 'Personas', tablaDrill(
+                    [
+                        ['Persona', p => `<strong>${p.nombre}</strong>`],
+                        ['Equipo', p => p.equipo],
+                        ['Puesto', p => p.puesto || '--'],
+                        ['Estado', p => p.estado === 'Activo' ? 'Activo' : `<span style="color: var(--warning);">${p.estado}</span>`],
+                        ['Días presentes', p => p.con_tag ? `${p.dias_presente} / ${diasLab}` : '<small style="color: var(--text-muted);">sin tag</small>'],
+                        ['% presencia', p => p.con_tag ? fmtPct(Math.min(1, (parseInt(p.dias_presente) || 0) / diasLab)) : '--'],
+                        ['Horas', p => fmtNum(p.horas, 1)],
+                        ['Reportes', p => parseInt(p.reportes) > 0 ? `<strong style="color: var(--accent-teal);">${p.reportes}</strong>` : '0']
+                    ],
+                    lista,
+                    p => llamada('irDrill', 'persona', p.token, p.nombre),
+                    'No hay personas para mostrar.'
+                ) + '<p class="drill-hint">👆 Clic en una persona para ver su fichada día por día. La idea es acompañar, no controlar.</p>');
+
+                return {
+                    miga: (titulos[comp] || 'Personas').split(':')[0],
+                    titulo: `🌱 Pulso Teal · ${(titulos[comp] || 'Personas').split(':')[0]}`,
+                    badge: `${fechaAR(desde)} → ${fechaAR(hasta)}`,
+                    html
+                };
+            },
+
+                    // NIVEL 3 / 4: una persona → su fichada día por día
+            async persona(token, nombre) {
+                const { desde, hasta } = periodoKpi();
+                const fichadas = await rpcJson('fn_kpi_fichadas', { p_desde: desde, p_hasta: hasta, p_token: token });
+
+                const horas = fichadas.reduce((a, f) => a + (num(f.horas) || 0), 0);
+                const unaMarca = fichadas.filter(f => (parseInt(f.marcas) || 0) <= 1).length;
+
+                let html = statsHtml([
+                    ['Días con fichada', fichadas.length],
+                    ['Horas totales', fmtNum(horas, 1), 'var(--accent-teal)'],
+                    ['Promedio h/día', fmtNum(ratio(horas, fichadas.length), 1)],
+                    ['Días con una sola marca', unaMarca, unaMarca ? 'var(--warning)' : 'var(--text-muted)']
+                ]);
+
+                html += bloque(`🕒 Fichadas (${fichadas.length})`, tablaDrill(
+                    [
+                        ['Fecha', f => `<strong>${diaSemana(f.fecha)} ${fechaAR(f.fecha)}</strong>`],
+                        ['Entrada', f => String(f.entrada || '--').substring(0, 5)],
+                        ['Salida', f => (parseInt(f.marcas) || 0) <= 1 ? '<span style="color: var(--warning);">sin salida</span>' : String(f.salida || '--').substring(0, 5)],
+                        ['Horas', f => fmtNum(f.horas, 2)],
+                        ['Marcas', f => f.marcas]
+                    ],
+                    fichadas, null, 'No hay fichadas en el período.'
+                ));
+
+                return {
+                    miga: `👤 ${nombre}`,
+                    titulo: `👤 ${nombre}`,
+                    badge: `${fechaAR(desde)} → ${fechaAR(hasta)}`,
+                    html
+                };
+            }
+        };
 
         async function guardarMetaKpi(id) {
             const def = KPI_TEAL.find(k => k.id === id);
@@ -3266,6 +4165,7 @@
         }
 
         function mostrarOrigenKpi(tipo) {
+            drillStack = [];
             const tituloEl = document.getElementById('modal-kpi-titulo');
             const fuenteEl = document.getElementById('modal-kpi-fuente');
             const bodyEl = document.getElementById('modal-kpi-body');
