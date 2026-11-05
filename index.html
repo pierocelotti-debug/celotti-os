@@ -532,8 +532,12 @@
                     <label>Fecha Puntual a Inspeccionar:</label>
                     <input type="date" id="filtro-proc-fecha" onchange="cargarProcesosYTiemposData()">
                 </div>
+                <div class="filter-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-sm" onclick="document.getElementById('filtro-proc-fecha').value=''; cargarProcesosYTiemposData();">↺ Volver a 30 días</button>
+                </div>
                 <div class="filter-group" style="align-self: center; font-size: 0.85rem; color: var(--text-muted);">
-                    ℹ️ <em>Los promedios muestran la ventana móvil de los últimos 30 días.</em>
+                    ℹ️ <em id="proc-info-periodo">Tiempo real = promedio del ciclo Desarmado ➔ Armado (ventana móvil de 30 días).</em>
                 </div>
             </div>
 
@@ -748,6 +752,10 @@
         const SUPABASE_URL = "https://vpomzjwmmfudgiahrqlk.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_nV5g16RZT73mlRkvF9mDWA_oXz805Q4";
         const WEBHOOK_N8N_PDF = "https://n8n.celotti.com.ar/webhook/generar-reporte-bienestar";
+        const SB_HEADERS = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+
+        // Tolerancia para considerar un ciclo "fuera de tiempo" (% sobre el objetivo)
+        const TOLERANCIA_DESVIO_PCT = 10;
 
         let cacheCalidad = [];
         let cacheDesmoldeProcesado = [];
@@ -756,7 +764,7 @@
         let cacheDemandaOdoo = [];
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
-        let cacheHistoricoDesvios = [];
+        let cacheTiemposMoldes = [];
 
         let filtroEstadoKpiActivo = null;
         let filtroCalidadKpiActivo = null;
@@ -767,6 +775,68 @@
             equipoSeleccionado: null,
             familiaSeleccionada: null
         };
+
+        /* ===== HELPERS GENERALES ===== */
+
+        // Escapa un string para usarlo como argumento '...' dentro de un onclick="..."
+        function argJs(valor) {
+            return String(valor ?? '')
+                .replace(/\\/g, '\\\\')
+                .replace(/'/g, "\\'")
+                .replace(/"/g, '&quot;');
+        }
+
+        // Fecha local YYYY-MM-DD (toISOString usa UTC y después de las 21 h en Argentina da el día siguiente)
+        function fechaLocalISO(d = new Date()) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        }
+
+        function num(v) {
+            const n = parseFloat(v);
+            return isNaN(n) ? null : n;
+        }
+
+        function fmtMin(v) {
+            const n = num(v);
+            return n === null ? '--' : `${n.toFixed(1)} min`;
+        }
+
+        function fmtDesvio(v) {
+            const n = num(v);
+            if (n === null) return '--';
+            return `${n > 0 ? '+' : ''}${n.toFixed(1)} min`;
+        }
+
+        // Normaliza nombres para deduplicar: sin tildes, minúsculas, espacios simples y palabras ordenadas
+        function normalizarNombre(s) {
+            return (s || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[\s\u00A0]+/g, ' ')
+                .trim()
+                .split(' ')
+                .sort()
+                .join(' ');
+        }
+
+        // Una sola tarjeta por persona aunque la vista devuelva varias filas (varios tags)
+        function deduplicarOperarios(rawData) {
+            if (!Array.isArray(rawData)) return [];
+            const mapa = new Map();
+            rawData.forEach(op => {
+                const key = normalizarNombre(op.Operario) || String(op.persona_id);
+                const previo = mapa.get(key);
+                if (!previo || (parseInt(op.total_auditorias) || 0) > (parseInt(previo.total_auditorias) || 0)) {
+                    mapa.set(key, op);
+                }
+            });
+            return Array.from(mapa.values())
+                .sort((a, b) => (a.posicion_ranking || 0) - (b.posicion_ranking || 0))
+                .map((op, idx) => ({ ...op, posicion_ranking: idx + 1 }));
+        }
 
         window.onclick = function(event) {
             if (event.target.classList.contains('modal-overlay')) {
@@ -828,7 +898,7 @@
                 document.getElementById('tab-title').innerText = 'Calidad y Reporte de Desmolde por Molde';
                 cargarCalidadData();
             } else if(tab === 'procesos-tiempos') {
-                document.getElementById('tab-title').innerText = 'Procesos: Análisis de Tiempos Teóricos vs. Reales por Equipo y Familia';
+                document.getElementById('tab-title').innerText = 'Procesos: Tiempos Teóricos vs. Reales por Equipo y Familia';
                 cargarProcesosYTiemposData();
             } else if(tab === 'mantenimiento') {
                 document.getElementById('tab-title').innerText = 'Gestión de Procesos y Mantenimiento';
@@ -880,14 +950,17 @@
                 }
 
                 const [resEficiencia, resDemanda, resMoldes] = await Promise.all([
-                    fetch(urlEficiencia, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                    fetch(urlEficiencia, { headers: SB_HEADERS }),
+                    fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }),
+                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: SB_HEADERS })
                 ]);
 
-                cacheEficienciaMoldes = await resEficiencia.json();
-                cacheDemandaOdoo = await resDemanda.json();
-                cacheMoldesPlanificacion = await resMoldes.json();
+                const ef = await resEficiencia.json();
+                const dem = await resDemanda.json();
+                const mol = await resMoldes.json();
+                cacheEficienciaMoldes = Array.isArray(ef) ? ef : [];
+                cacheDemandaOdoo = Array.isArray(dem) ? dem : [];
+                cacheMoldesPlanificacion = Array.isArray(mol) ? mol : [];
 
                 actualizarKpisMoldes(cacheEficienciaMoldes);
                 filtrarPlanificacion();
@@ -963,7 +1036,7 @@
 
                 return `
                     <div class="card" style="border-left: 4px solid ${borderColor};">
-                        <div class="card-header" onclick="verTrazaMolde(${item.n_molde}, '${item.producto}')" style="cursor:pointer;">
+                        <div class="card-header" onclick="verTrazaMolde('${argJs(item.n_molde)}', '${argJs(item.producto)}')" style="cursor:pointer;">
                             <span>Molde #${item.n_molde}</span>
                             ${badgeEstado}
                         </div>
@@ -979,14 +1052,14 @@
                         
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             ${badgeAlerta}
-                            <small style="color: var(--text-muted); cursor:pointer;" onclick="verTrazaMolde(${item.n_molde}, '${item.producto}')">Ver Traza ➔</small>
+                            <small style="color: var(--text-muted); cursor:pointer;" onclick="verTrazaMolde('${argJs(item.n_molde)}', '${argJs(item.producto)}')">Ver Traza ➔</small>
                         </div>
 
                         <!-- TRES BOTONES DE REGISTRO MANUAL DE ETAPAS (SOBREESCRITURA RFID) -->
                         <div class="action-buttons-rfid">
-                            <button class="btn btn-sm" style="background-color: var(--blue-info); color:white; flex:1;" onclick="registrarEtapaManual(${item.n_molde}, 'DESARMADO')">🔓 Desarmar</button>
-                            <button class="btn btn-sm" style="background-color: var(--warning); color:black; flex:1;" onclick="registrarEtapaManual(${item.n_molde}, 'ARMADO')">🔒 Armar</button>
-                            <button class="btn btn-sm" style="background-color: var(--accent-teal); color:black; flex:1;" onclick="registrarEtapaManual(${item.n_molde}, 'LLENADO')">🧱 Llenar</button>
+                            <button class="btn btn-sm" style="background-color: var(--blue-info); color:white; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'DESARMADO')">🔓 Desarmar</button>
+                            <button class="btn btn-sm" style="background-color: var(--warning); color:black; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'ARMADO')">🔒 Armar</button>
+                            <button class="btn btn-sm" style="background-color: var(--accent-teal); color:black; flex:1;" onclick="registrarEtapaManual('${argJs(item.n_molde)}', 'LLENADO')">🧱 Llenar</button>
                         </div>
                     </div>
                 `;
@@ -995,18 +1068,12 @@
 
         async function registrarEtapaManual(nMolde, etapa) {
             const timestampActual = new Date().toISOString();
-            let payload = {};
-
-            if (etapa === 'DESARMADO') payload = { hora_desarmado: timestampActual, estado_flujo: 'POR LLENAR' };
-            else if (etapa === 'ARMANDO' || etapa === 'ARMADO') payload = { hora_armado: timestampActual, estado_flujo: 'ARMANDO' };
-            else if (etapa === 'LLENADO') payload = { hora_llenado: timestampActual, estado_flujo: 'FINALIZADO' };
 
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/lecturas_rfid_moldes`, {
                     method: 'POST',
                     headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        ...SB_HEADERS,
                         'Content-Type': 'application/json',
                         'Prefer': 'return=minimal'
                     },
@@ -1018,6 +1085,14 @@
                     })
                 });
 
+                // Antes mostraba "✅" aunque Supabase rechazara el insert (4xx/5xx)
+                if (!res.ok) {
+                    const detalle = await res.text();
+                    console.error("Supabase rechazó la marca manual:", detalle);
+                    alert(`❌ Supabase rechazó la marca (Status ${res.status}). Revisá la consola.`);
+                    return;
+                }
+
                 alert(`✅ Etapa '${etapa}' registrada manualmente para Molde #${nMolde}.`);
                 cargarPlanificacionData();
             } catch (err) {
@@ -1027,7 +1102,7 @@
         }
 
         function verTrazaMolde(nMolde, producto) {
-            const m = cacheEficienciaMoldes.find(item => item.n_molde === nMolde && item.producto === producto);
+            const m = cacheEficienciaMoldes.find(item => String(item.n_molde) === String(nMolde) && item.producto === producto);
             if (!m) return;
 
             document.getElementById('modal-molde-titulo').innerText = `Molde #${m.n_molde} - ${m.producto}`;
@@ -1067,7 +1142,7 @@
             const equipo = document.getElementById('filtro-plan-equipo').value;
 
             const moldesFiltrados = cacheEficienciaMoldes.filter(m => {
-                const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || m.n_molde.toString().includes(texto);
+                const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || String(m.n_molde ?? '').includes(texto);
                 const coincideEquipo = (equipo === 'TODOS') || (m.equipo_planificacion === equipo);
                 
                 let coincideKpi = true;
@@ -1133,7 +1208,7 @@
                         <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag}</small></p>
                         <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
-                            <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${molde.id_tag}', '${molde.Estado}')">
+                            <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${argJs(molde.Estado)}')">
                                 ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
                             </button>
                         </div>
@@ -1147,10 +1222,11 @@
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?id_tag=eq.${encodeURIComponent(idTag)}`, {
                     method: 'PATCH',
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+                    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
                     body: JSON.stringify({ "Estado": nuevoEstado })
                 });
                 if (res.ok) cargarPlanificacionData();
+                else alert(`❌ No se pudo actualizar el molde (Status ${res.status}).`);
             } catch (err) { alert('Error al actualizar molde.'); }
         }
 
@@ -1158,8 +1234,8 @@
         async function cargarCalidadData() {
             try {
                 const [resApp, resVistaDesmolde] = await Promise.all([
-                    fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/vista_ranking_defectos_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                    fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }),
+                    fetch(`${SUPABASE_URL}/rest/v1/vista_ranking_defectos_moldes?select=*`, { headers: SB_HEADERS })
                 ]);
 
                 cacheCalidad = await resApp.json();
@@ -1208,7 +1284,7 @@
                 const modeloLimpio = (m.modelo || 'Sin Familia').trim();
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleDesmolde('${m.n_molde}', '${modeloLimpio}')">
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleDesmolde('${argJs(m.n_molde)}', '${argJs(modeloLimpio)}')">
                         <div>
                             <div class="card-header">
                                 <span>Molde N° ${m.n_molde}</span>
@@ -1239,7 +1315,7 @@
         async function verDetalleDesmolde(nMolde, modelo) {
             const modeloBuscado = (modelo || '').trim();
             const m = cacheDesmoldeProcesado.find(item => 
-                item.n_molde.toString() === nMolde.toString() && 
+                String(item.n_molde) === String(nMolde) && 
                 (item.modelo || '').trim() === modeloBuscado
             );
             if (!m) return;
@@ -1250,10 +1326,11 @@
             document.getElementById('modal-desmolde').style.display = 'flex';
 
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?n_molde=eq.${m.n_molde}&modelo=eq.${encodeURIComponent(modeloBuscado)}&order=fecha.desc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_desmolde_calidad?n_molde=eq.${encodeURIComponent(m.n_molde)}&modelo=eq.${encodeURIComponent(modeloBuscado)}&order=fecha.desc`, {
+                    headers: SB_HEADERS
                 });
                 const registrosPiezas = await res.json();
+                const listaPiezas = Array.isArray(registrosPiezas) ? registrosPiezas : [];
 
                 const htmlDefectos = `
                     <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid var(--border-color);">
@@ -1270,7 +1347,7 @@
                     </div>
                     <h4 style="color: var(--accent-teal); margin-bottom: 8px;">Historial Cronológico (id_unico_match):</h4>
                     <div style="max-height: 250px; overflow-y: auto;">
-                        ${registrosPiezas.map(r => `
+                        ${listaPiezas.map(r => `
                             <div style="border-bottom: 1px solid var(--border-color); padding: 8px 0; font-size: 0.85rem;">
                                 <div style="display:flex; justify-content:space-between; color: var(--text-muted);">
                                     <span>📅 ${new Date(r.fecha).toLocaleString('es-AR')}</span>
@@ -1295,7 +1372,7 @@
         function filtrarReporteDesmolde() {
             const texto = document.getElementById('filtro-desmolde-texto').value.toLowerCase();
             const filtrados = cacheDesmoldeProcesado.filter(m =>
-                m.n_molde.toString().toLowerCase().includes(texto) ||
+                String(m.n_molde ?? '').toLowerCase().includes(texto) ||
                 (m.modelo || '').toLowerCase().includes(texto)
             );
             renderizarTarjetasDesmolde(filtrados);
@@ -1354,7 +1431,7 @@
                     : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin evidencia fotográfica</span></div>`;
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleCalidad('${item.id}')">
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleCalidad('${argJs(item.id)}')">
                         <div>
                             <div class="card-header">
                                 <span>Incidencia Calidad</span>
@@ -1375,7 +1452,7 @@
         }
 
         function verDetalleCalidad(id) {
-            const c = cacheCalidad.find(item => item.id === id);
+            const c = cacheCalidad.find(item => String(item.id) === String(id));
             if (!c) return;
 
             let estadoVisual = c.estado || 'Abierto';
@@ -1407,53 +1484,94 @@
             document.getElementById('modal-detalle').style.display = 'flex';
         }
 
-        /* 3. PROCESOS & TIEMPOS CON VENTANA MÓVIL 30 DÍAS Y BUSQUEDA PUNTUAL */
+        /* 3. PROCESOS & TIEMPOS
+           Fuente: RPC fn_tiempos_moldes (agrega en Supabase por molde el ciclo DESARMADO ➔ ARMADO). */
         async function cargarProcesosYTiemposData() {
+            const containerEq = document.getElementById('view-proc-equipos');
+            const info = document.getElementById('proc-info-periodo');
+
             try {
                 const fechaPuntual = document.getElementById('filtro-proc-fecha').value;
                 const d30 = new Date();
                 d30.setDate(d30.getDate() - 30);
-                const fecha30DiasStr = d30.toISOString().split('T')[0];
 
-                let urlDesvios = `${SUPABASE_URL}/rest/v1/ranking_historico_desvios_moldes?select=*`;
-                if (fechaPuntual) {
-                    urlDesvios += `&fecha_medicion=eq.${fechaPuntual}`;
-                } else {
-                    urlDesvios += `&fecha_medicion=gte.${fecha30DiasStr}`;
-                }
+                const desde = fechaPuntual || fechaLocalISO(d30);
+                const hasta = fechaPuntual || fechaLocalISO();
 
-                const [resEf, resDesvios, resMoldes] = await Promise.all([
-                    fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(urlDesvios, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                    fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
-                ]);
+                info.innerText = fechaPuntual
+                    ? `Tiempo real = ciclo Desarmado ➔ Armado del día ${fechaPuntual.split('-').reverse().join('/')}.`
+                    : `Tiempo real = promedio del ciclo Desarmado ➔ Armado (ventana móvil de 30 días). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
 
-                cacheEficienciaMoldes = await resEf.json();
-                cacheHistoricoDesvios = await resDesvios.json();
-                cacheMoldesPlanificacion = await resMoldes.json();
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/fn_tiempos_moldes`, {
+                    method: 'POST',
+                    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT })
+                });
 
-                if (!Array.isArray(cacheHistoricoDesvios)) cacheHistoricoDesvios = [];
-                if (!Array.isArray(cacheEficienciaMoldes)) cacheEficienciaMoldes = [];
+                if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
 
-                renderizarNivelEquipos();
+                const data = await res.json();
+                cacheTiemposMoldes = Array.isArray(data) ? data : [];
+
+                // Re-renderiza el nivel en el que estaba el usuario
+                navegarProcesos(navProcesosEstado.nivel, navProcesosEstado.equipoSeleccionado, navProcesosEstado.familiaSeleccionada);
             } catch (err) {
-                console.error("Error cargando vistas de procesos y tiempos:", err);
+                console.error("Error cargando tiempos de moldes:", err);
+                containerEq.style.display = 'grid';
+                containerEq.innerHTML = `<p style="color: var(--danger);">❌ Error al consultar fn_tiempos_moldes: ${err.message}</p>`;
             }
         }
 
+        // Resumen ponderado por cantidad de ciclos (no promedio de promedios)
+        function resumirTiempos(lista) {
+            let ciclos = 0, sumaReal = 0, sumaObj = 0, ciclosConObj = 0, sumaDesv = 0, ciclosConDesv = 0, fuera = 0;
+            lista.forEach(m => {
+                const c = parseInt(m.ciclos_medidos) || 0;
+                const real = num(m.tiempo_real_prom_min);
+                const obj = num(m.tiempo_objetivo_min);
+                const desv = num(m.desvio_prom_min);
+                ciclos += c;
+                if (real !== null) sumaReal += real * c;
+                if (obj !== null) { sumaObj += obj * c; ciclosConObj += c; }
+                if (desv !== null) { sumaDesv += desv * c; ciclosConDesv += c; }
+                fuera += parseInt(m.ciclos_fuera_tolerancia) || 0;
+            });
+            return {
+                ciclos,
+                realProm: ciclos > 0 ? sumaReal / ciclos : null,
+                objProm: ciclosConObj > 0 ? sumaObj / ciclosConObj : null,
+                desvProm: ciclosConDesv > 0 ? sumaDesv / ciclosConDesv : null,
+                pctIncumplimiento: ciclos > 0 ? (fuera / ciclos) * 100 : 0
+            };
+        }
+
+        function colorPorIncumplimiento(pct) {
+            if (pct > 35) return { border: 'var(--danger)', badge: 'badge-danger' };
+            if (pct > 15) return { border: 'var(--warning)', badge: 'badge-warning' };
+            return { border: 'var(--accent-teal)', badge: 'badge-success' };
+        }
+
         function navegarProcesos(nivel, equipo = null, familia = null) {
-            navProcesosEstado.nivel = nivel;
+            navProcesosEstado.nivel = nivel || 'EQUIPOS';
+            if (navProcesosEstado.nivel === 'EQUIPOS') {
+                navProcesosEstado.equipoSeleccionado = null;
+                navProcesosEstado.familiaSeleccionada = null;
+            }
             if (equipo) navProcesosEstado.equipoSeleccionado = equipo;
             if (familia) navProcesosEstado.familiaSeleccionada = familia;
+            if (navProcesosEstado.nivel === 'FAMILIAS') navProcesosEstado.familiaSeleccionada = null;
+
+            const eqSel = navProcesosEstado.equipoSeleccionado;
+            const famSel = navProcesosEstado.familiaSeleccionada;
 
             const breadcrumbEl = document.getElementById('proc-breadcrumb');
             let htmlBc = `<span class="breadcrumb-item" onclick="navegarProcesos('EQUIPOS')">🏭 Planta General</span>`;
             
-            if (nivel === 'FAMILIAS' || nivel === 'MOLDES') {
-                htmlBc += ` ➔ <span class="breadcrumb-item" onclick="navegarProcesos('FAMILIAS', '${navProcesosEstado.equipoSeleccionado}')">Equipo ${navProcesosEstado.equipoSeleccionado}</span>`;
+            if (navProcesosEstado.nivel === 'FAMILIAS' || navProcesosEstado.nivel === 'MOLDES') {
+                htmlBc += ` ➔ <span class="breadcrumb-item" onclick="navegarProcesos('FAMILIAS', '${argJs(eqSel)}')">Equipo ${eqSel}</span>`;
             }
-            if (nivel === 'MOLDES') {
-                htmlBc += ` ➔ <span style="color: var(--text-main); font-weight: 700;">Familia: ${navProcesosEstado.familiaSeleccionada}</span>`;
+            if (navProcesosEstado.nivel === 'MOLDES') {
+                htmlBc += ` ➔ <span style="color: var(--text-main); font-weight: 700;">Familia: ${famSel}</span>`;
             }
             breadcrumbEl.innerHTML = htmlBc;
 
@@ -1461,45 +1579,34 @@
             document.getElementById('view-proc-familias').style.display = 'none';
             document.getElementById('view-proc-moldes').style.display = 'none';
 
-            if (nivel === 'EQUIPOS') renderizarNivelEquipos();
-            else if (nivel === 'FAMILIAS') renderizarNivelFamilias(navProcesosEstado.equipoSeleccionado);
-            else if (nivel === 'MOLDES') renderizarNivelMoldes(navProcesosEstado.equipoSeleccionado, navProcesosEstado.familiaSeleccionada);
+            if (navProcesosEstado.nivel === 'EQUIPOS') renderizarNivelEquipos();
+            else if (navProcesosEstado.nivel === 'FAMILIAS') renderizarNivelFamilias(eqSel);
+            else if (navProcesosEstado.nivel === 'MOLDES') renderizarNivelMoldes(eqSel, famSel);
         }
 
         function renderizarNivelEquipos() {
             const container = document.getElementById('view-proc-equipos');
             container.style.display = 'grid';
 
-            const equipos = ['Amarillo', 'Azul', 'Rojo', 'Verde'];
+            const equiposBase = ['Amarillo', 'Azul', 'Rojo', 'Verde'];
+            const equiposData = [...new Set(cacheTiemposMoldes.map(m => m.equipo).filter(Boolean))];
+            const equipos = [...new Set([...equiposBase, ...equiposData])];
 
             container.innerHTML = equipos.map(eq => {
-                const moldesEquipo = cacheEficienciaMoldes.filter(m => m.equipo_planificacion === eq);
-                const nMoldes = moldesEquipo.map(m => m.n_molde);
-                
-                const desviosEq = cacheHistoricoDesvios.filter(d => nMoldes.includes(d.n_molde));
-                
-                const totalCiclos = desviosEq.reduce((acc, curr) => acc + parseInt(curr.total_ciclos_medidos || 0), 0);
-                const desvioPromedio = desviosEq.length > 0 
-                    ? (desviosEq.reduce((acc, curr) => acc + parseFloat(curr.desvio_promedio_min || 0), 0) / desviosEq.length).toFixed(1)
-                    : "0.0";
-
-                const pctIncumplimiento = desviosEq.length > 0
-                    ? (desviosEq.reduce((acc, curr) => acc + parseFloat(curr.porcentaje_incumplimiento || 0), 0) / desviosEq.length).toFixed(1)
-                    : "0.0";
-
-                let border = 'var(--accent-teal)';
-                if (parseFloat(pctIncumplimiento) > 35) border = 'var(--danger)';
-                else if (parseFloat(pctIncumplimiento) > 15) border = 'var(--warning)';
+                const moldesEquipo = cacheTiemposMoldes.filter(m => m.equipo === eq);
+                const r = resumirTiempos(moldesEquipo);
+                const col = colorPorIncumplimiento(r.pctIncumplimiento);
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${border};" onclick="navegarProcesos('FAMILIAS', '${eq}')">
+                    <div class="card card-interactive" style="border-left: 4px solid ${moldesEquipo.length ? col.border : 'var(--border-color)'};" onclick="navegarProcesos('FAMILIAS', '${argJs(eq)}')">
                         <div class="card-header">
                             <span>Equipo ${eq}</span>
-                            <span class="badge ${parseFloat(pctIncumplimiento) > 25 ? 'badge-danger' : 'badge-success'}">${pctIncumplimiento}% Desvío</span>
+                            <span class="badge ${moldesEquipo.length ? col.badge : ''}">${r.pctIncumplimiento.toFixed(1)}% fuera de tiempo</span>
                         </div>
-                        <p>📋 Moldes Asignados: <strong>${moldesEquipo.length} moldes</strong></p>
-                        <p>⏱️ Desvío Promedio (30 días): <strong>+${desvioPromedio} min</strong></p>
-                        <p><small>📊 Total Ciclos Medidos RFID: ${totalCiclos}</small></p>
+                        <p>📋 Moldes con mediciones: <strong>${moldesEquipo.length}</strong></p>
+                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. ${fmtMin(r.objProm)})</small></p>
+                        <p>📈 Desvío Promedio: <strong>${fmtDesvio(r.desvProm)}</strong></p>
+                        <p><small>📊 Ciclos Desarmado ➔ Armado medidos: ${r.ciclos}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Familias de Productos ➔</span>
                         </div>
@@ -1512,37 +1619,34 @@
             const container = document.getElementById('view-proc-familias');
             container.style.display = 'grid';
 
-            const moldesEquipo = cacheEficienciaMoldes.filter(m => m.equipo_planificacion === equipo);
-            
+            const moldesEquipo = cacheTiemposMoldes.filter(m => m.equipo === equipo);
+
             const familiasMap = {};
             moldesEquipo.forEach(m => {
-                const fam = m.producto ? m.producto.split(' ')[0] : 'General';
+                const fam = m.familia || 'General';
                 if (!familiasMap[fam]) familiasMap[fam] = [];
                 familiasMap[fam].push(m);
             });
 
-            const keysFamilias = Object.keys(familiasMap);
+            const keysFamilias = Object.keys(familiasMap).sort();
             if (keysFamilias.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-muted);">No hay moldes registrados para este equipo.</p>';
+                container.innerHTML = '<p style="color: var(--text-muted);">No hay ciclos medidos para este equipo en el período seleccionado.</p>';
                 return;
             }
 
             container.innerHTML = keysFamilias.map(fam => {
-                const moldesFam = familiasMap[fam];
-                const idsMoldes = moldesFam.map(m => m.n_molde);
-                const desviosFam = cacheHistoricoDesvios.filter(d => idsMoldes.includes(d.n_molde));
-
-                const desvioProm = desviosFam.length > 0
-                    ? (desviosFam.reduce((acc, curr) => acc + parseFloat(curr.desvio_promedio_min || 0), 0) / desviosFam.length).toFixed(1)
-                    : "0.0";
+                const r = resumirTiempos(familiasMap[fam]);
+                const col = colorPorIncumplimiento(r.pctIncumplimiento);
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid var(--blue-info);" onclick="navegarProcesos('MOLDES', '${equipo}', '${fam}')">
+                    <div class="card card-interactive" style="border-left: 4px solid ${col.border};" onclick="navegarProcesos('MOLDES', '${argJs(equipo)}', '${argJs(fam)}')">
                         <div class="card-header">
                             <span>Familia: ${fam}</span>
-                            <span class="badge badge-info">${moldesFam.length} Moldes</span>
+                            <span class="badge badge-info">${familiasMap[fam].length} Moldes</span>
                         </div>
-                        <p>⏱️ Desvío Promedio Familia: <strong>+${desvioProm} min</strong></p>
+                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. ${fmtMin(r.objProm)})</small></p>
+                        <p>📈 Desvío Promedio: <strong>${fmtDesvio(r.desvProm)}</strong></p>
+                        <p><small>📊 ${r.ciclos} ciclos | <span class="badge ${col.badge}">${r.pctIncumplimiento.toFixed(1)}% fuera de tiempo</span></small></p>
                         <div style="margin-top: 12px; text-align: right;">
                             <span style="color: var(--accent-teal); font-weight: 600; font-size: 0.85rem;">Ver Tiempos por Molde ➔</span>
                         </div>
@@ -1555,10 +1659,7 @@
             const container = document.getElementById('view-proc-moldes');
             container.style.display = 'block';
 
-            const moldesFiltrados = cacheEficienciaMoldes.filter(m => 
-                m.equipo_planificacion === equipo && 
-                (m.producto || '').startsWith(familia)
-            );
+            const moldesFiltrados = cacheTiemposMoldes.filter(m => m.equipo === equipo && (m.familia || 'General') === familia);
 
             if (moldesFiltrados.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-muted);">No hay registros para esta familia de productos.</p>';
@@ -1571,33 +1672,39 @@
                         <tr>
                             <th>N° Molde</th>
                             <th>Producto</th>
-                            <th>Tiempo Objetivo (Teórico)</th>
+                            <th>Ciclos</th>
+                            <th>Tiempo Objetivo</th>
                             <th>Tiempo Real Promedio</th>
-                            <th>Desvío Promedio (30d)</th>
+                            <th>Mín – Máx</th>
+                            <th>Desvío Promedio</th>
                             <th>Peor Desvío</th>
-                            <th>% Incumplimiento</th>
+                            <th>% Fuera de Tiempo</th>
+                            <th>Última Medición</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${moldesFiltrados.map(m => {
-                            const desvio = cacheHistoricoDesvios.find(d => d.n_molde === m.n_molde) || {};
-                            const teo = m.tiempo_objetivo_min || '--';
-                            const realProm = desvio.desvio_promedio_min ? (parseFloat(teo) + parseFloat(desvio.desvio_promedio_min)).toFixed(1) : teo;
-                            const pct = desvio.porcentaje_incumplimiento || '0.0';
-
+                            const pct = num(m.pct_incumplimiento) || 0;
                             let badge = 'badge-success';
-                            if (parseFloat(pct) > 30) badge = 'badge-danger';
-                            else if (parseFloat(pct) > 10) badge = 'badge-warning';
+                            if (pct > 30) badge = 'badge-danger';
+                            else if (pct > 10) badge = 'badge-warning';
+
+                            const desv = num(m.desvio_prom_min);
+                            const colorDesv = desv === null ? 'var(--text-muted)' : (desv > 0 ? 'var(--warning)' : 'var(--accent-teal)');
+                            const ultima = m.ultima_medicion ? m.ultima_medicion.split('-').reverse().join('/') : '--';
 
                             return `
                                 <tr>
                                     <td><strong>#${m.n_molde}</strong></td>
-                                    <td>${m.producto}</td>
-                                    <td>${teo} min</td>
-                                    <td style="font-weight:700;">${realProm} min</td>
-                                    <td style="color: var(--warning);">+${desvio.desvio_promedio_min || 0} min</td>
-                                    <td style="color: var(--danger);">${desvio.peor_desvio_registrado || 0} min</td>
-                                    <td><span class="badge ${badge}">${pct}%</span></td>
+                                    <td>${m.producto || '--'}</td>
+                                    <td>${m.ciclos_medidos}</td>
+                                    <td>${fmtMin(m.tiempo_objetivo_min)}</td>
+                                    <td style="font-weight:700;">${fmtMin(m.tiempo_real_prom_min)}</td>
+                                    <td><small>${fmtMin(m.tiempo_real_min_registrado)} – ${fmtMin(m.tiempo_real_max_registrado)}</small></td>
+                                    <td style="color: ${colorDesv};">${fmtDesvio(m.desvio_prom_min)}</td>
+                                    <td style="color: var(--danger);">${fmtDesvio(m.peor_desvio_min)}</td>
+                                    <td><span class="badge ${badge}">${pct.toFixed(1)}%</span></td>
+                                    <td><small>${ultima}</small></td>
                                 </tr>
                             `;
                         }).join('')}
@@ -1610,7 +1717,7 @@
         async function cargarProcesosData() {
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*&order=fecha_creacion.desc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                    headers: SB_HEADERS
                 });
                 cacheMantenimiento = await res.json();
                 if (!Array.isArray(cacheMantenimiento)) cacheMantenimiento = [];
@@ -1680,7 +1787,7 @@
                     : `<div class="card-img-container"><span class="no-img-placeholder">📷 Sin foto adjunta</span></div>`;
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleMantenimiento(${item.id})">
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleMantenimiento('${argJs(item.id)}')">
                         <div>
                             <div class="card-header">
                                 <span>OT #${item.id}</span>
@@ -1701,7 +1808,7 @@
         }
 
         function verDetalleMantenimiento(id) {
-            const m = cacheMantenimiento.find(item => item.id === id);
+            const m = cacheMantenimiento.find(item => String(item.id) === String(id));
             if (!m) return;
 
             let estadoVisual = m.estado || 'Abierta';
@@ -1739,7 +1846,7 @@
             const container = document.getElementById('logistica-list');
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*&cant_pendiente=gt.0`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                    headers: SB_HEADERS
                 });
                 const data = await res.json();
                 if (!Array.isArray(data) || data.length === 0) {
@@ -1758,14 +1865,14 @@
             } catch (e) { console.error(e); }
         }
 
-        /* 6. BIENESTAR ORGANIZACIONAL (CON DEDUPLICACIÓN DE OPERARIOS) */
+        /* 6. BIENESTAR ORGANIZACIONAL (DEDUPLICACIÓN POR NOMBRE NORMALIZADO) */
         async function cargarBienestarData() {
             const container = document.getElementById('bienestar-list');
             container.innerHTML = '<p style="color: var(--text-muted);">Cargando nómina y auditorías desde Supabase...</p>';
 
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, {
-                    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+                    headers: SB_HEADERS
                 });
 
                 if (!res.ok) throw new Error(`Status ${res.status}: ${res.statusText}`);
@@ -1777,18 +1884,10 @@
                     return;
                 }
 
-                // DEDUPLICACIÓN CLAVE POR persona_id PARA EVITAR DUPLICADOS EN PANTALLA
-                const operariosMap = new Map();
-                rawData.forEach(op => {
-                    const key = op.persona_id || op.Operario;
-                    if (!operariosMap.has(key)) {
-                        operariosMap.set(key, op);
-                    }
-                });
-                cacheRankingBienestar = Array.from(operariosMap.values());
+                cacheRankingBienestar = deduplicarOperarios(rawData);
 
                 actualizarKpisBienestar(cacheRankingBienestar);
-                renderizarRankingBienestar(cacheRankingBienestar);
+                filtrarRankingBienestar();
 
             } catch (e) {
                 console.error("Error en módulo Bienestar:", e);
@@ -1834,7 +1933,7 @@
                 else if (item.nivel_desempeno === 'REQUIERE_APOYO') badgeNivel = `<span class="badge badge-warning">REQUIERE APOYO</span>`;
 
                 return `
-                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleOperario(${item.persona_id})">
+                    <div class="card card-interactive" style="border-left: 4px solid ${borderColor};" onclick="verDetalleOperario('${argJs(item.persona_id)}')">
                         <div class="card-header">
                             <span>${item.Operario}</span>
                             ${badgePosicion}
@@ -1871,7 +1970,7 @@
         }
 
         function verDetalleOperario(personaId) {
-            const op = cacheRankingBienestar.find(p => p.persona_id === personaId);
+            const op = cacheRankingBienestar.find(p => String(p.persona_id) === String(personaId));
             if (!op) return;
 
             document.getElementById('modal-op-nombre').innerText = op.Operario;
@@ -1886,7 +1985,7 @@
                 <p><strong>Equipos Activos:</strong> ${op.Equipos || 'General'}</p>
                 <p><strong>Estado RRHH:</strong> ${op.estado_rrhh}</p>
                 <hr style="border-color: var(--border-color); margin: 12px 0;">
-                <p><strong>ID Odoo:</strong> ${op.id_odoo || 'N/A'} | <strong>Tag RFID:</strong> <code>${op.numero_tag || 'Sin Tag'}</code></p>
+                <p><strong>ID Odoo:</strong> ${op.id_odoo || 'N/A'} | <strong>Tag(s) RFID:</strong> <code>${op.numero_tag || 'Sin Tag'}</code></p>
                 <p><strong>Total de Auditorías:</strong> ${op.total_auditorias}</p>
                 <p><strong>Historial Secuencial:</strong> <br><span style="color: var(--accent-teal);">${historialFormateado}</span></p>
                 <p><small style="color: var(--text-muted);">Última Auditoría realizada: ${fechaUltima}</small></p>
@@ -1908,13 +2007,13 @@
             btn.innerText = "⏳ Procesando en n8n...";
 
             const payload = {
-                operario: operario.trim(),
+                operario: (operario || '').trim(),
                 equipo: (equipo || 'General').trim(),
                 puesto: 'Operario',
                 nota: nota,
                 desempeño: desempeno,
                 comentarios: `Reporte generado desde Celotti OS. Promedio de auditoría: ${nota}/10.`,
-                fecha: new Date().toISOString().split('T')[0]
+                fecha: fechaLocalISO()
             };
 
             try {
@@ -1941,20 +2040,26 @@
         /* 7. INDICADORES Y MODAL DE ORIGEN */
         async function cargarIndicadoresData() {
             try {
-                if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0) {
+                if (cacheEficienciaMoldes.length === 0 || cacheCalidad.length === 0 || cacheMantenimiento.length === 0 || cacheRankingBienestar.length === 0) {
                     const [resEf, resCal, resMant, resBien, resDem] = await Promise.all([
-                        fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }),
-                        fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } })
+                        fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*`, { headers: SB_HEADERS }),
+                        fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }),
+                        fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }),
+                        fetch(`${SUPABASE_URL}/rest/v1/ranking_operarios_inteligente?select=*&order=posicion_ranking.asc`, { headers: SB_HEADERS }),
+                        fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS })
                     ]);
 
-                    cacheEficienciaMoldes = await resEf.json();
-                    cacheCalidad = await resCal.json();
-                    cacheMantenimiento = await resMant.json();
-                    cacheRankingBienestar = await resBien.json();
-                    cacheDemandaOdoo = await resDem.json();
+                    const ef = await resEf.json();
+                    const cal = await resCal.json();
+                    const mant = await resMant.json();
+                    const bien = await resBien.json();
+                    const dem = await resDem.json();
+
+                    cacheEficienciaMoldes = Array.isArray(ef) ? ef : [];
+                    cacheCalidad = Array.isArray(cal) ? cal : [];
+                    cacheMantenimiento = Array.isArray(mant) ? mant : [];
+                    cacheRankingBienestar = deduplicarOperarios(bien);
+                    cacheDemandaOdoo = Array.isArray(dem) ? dem : [];
                 }
 
                 const totalMoldes = cacheEficienciaMoldes.length || 1;
