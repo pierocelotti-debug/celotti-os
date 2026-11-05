@@ -182,6 +182,11 @@
             font-weight: 700;
             margin-top: 6px;
         }
+        .kpi-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
         .grid-cards {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -411,13 +416,25 @@
         .breadcrumb-item:hover {
             text-decoration: underline;
         }
+
+        .fuente-tag {
+            display: inline-block;
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            margin: 1px;
+        }
+        .fuente-rfid { border-color: var(--accent-teal); color: var(--accent-teal); }
+        .fuente-historico { border-color: var(--blue-info); color: #93c5fd; }
     </style>
 </head>
 <body>
 
     <div class="sidebar">
         <div class="brand">🏭 CELOTTI OS</div>
-        <div class="nav-item active" id="nav-planificacion" onclick="switchTab('planificacion')">📦 Planificación</div>
+        <div class="nav-item active" id="nav-planificacion" onclick="switchTab('planificacion')">👷‍♀️ Planificación</div>
         
         <!-- CALIDAD DESPLEGABLE -->
         <div class="nav-item" id="nav-parent-calidad" onclick="toggleSubmenuCalidad()">
@@ -546,6 +563,16 @@
                 <div class="filter-group" style="align-self: center; font-size: 0.85rem; color: var(--text-muted);">
                     ℹ️ <em id="proc-info-periodo">Tiempo real = promedio del ciclo Desarmado ➔ Armado (ventana móvil de 30 días).</em>
                 </div>
+            </div>
+
+            <!-- KPIs DE EFICIENCIA DEL PERÍODO -->
+            <div class="kpi-container" id="kpis-proc-eficiencia"></div>
+
+            <!-- EFICIENCIA HISTÓRICA POR DÍA -->
+            <div class="card" id="card-proc-diaria" style="margin-bottom: 20px; display: none;">
+                <h3 style="margin: 0; color: var(--accent-teal);">📅 Eficiencia por Día</h3>
+                <p style="margin: 4px 0 0; color: var(--text-muted); font-size: 0.85rem;">Fuente: historico_eficiencia_moldes. Hacé clic en un día para inspeccionarlo.</p>
+                <div id="tabla-proc-diaria" style="max-height: 320px; overflow-y: auto;"></div>
             </div>
 
             <div class="breadcrumb" id="proc-breadcrumb">
@@ -775,6 +802,7 @@
         let cacheMoldesPlanificacion = [];
         let cacheRankingBienestar = [];
         let cacheTiemposMoldes = [];
+        let cacheResumenDiario = [];
 
         // etapa -> zona (desde config_zonas_rfid) para grabar los overrides manuales
         let cacheZonasPorEtapa = {};
@@ -819,6 +847,17 @@
             return `${fechaLocalISO(d)} ${hh}:${mi}:${ss}`;
         }
 
+        // "2026-11-05" -> "05/11/2026"
+        function fechaAR(iso) {
+            return iso ? String(iso).substring(0, 10).split('-').reverse().join('/') : '--';
+        }
+
+        // "2026-11-05" -> "jue"
+        function diaSemana(iso) {
+            if (!iso) return '';
+            return new Date(`${String(iso).substring(0, 10)}T12:00:00`).toLocaleDateString('es-AR', { weekday: 'short' });
+        }
+
         // "2026-11-05T08:12:33" -> "08:12"
         function horaCorta(ts) {
             if (!ts) return '--:--';
@@ -840,6 +879,15 @@
             const n = num(v);
             if (n === null) return '--';
             return `${n > 0 ? '+' : ''}${n.toFixed(1)} min`;
+        }
+
+        function fuenteHtml(fuentes) {
+            if (!fuentes) return '';
+            return String(fuentes).split('+').map(f => f.trim()).filter(Boolean).map(f => {
+                const clase = f === 'RFID' ? 'fuente-rfid' : (f === 'HISTORICO' ? 'fuente-historico' : '');
+                const texto = f === 'HISTORICO' ? 'HISTÓRICO' : f;
+                return `<span class="fuente-tag ${clase}">${texto}</span>`;
+            }).join('');
         }
 
         // Devuelve [] si la respuesta falla, para que un endpoint caído no rompa toda la pantalla
@@ -1114,7 +1162,7 @@
                 const horaArm = horaCorta(item.hora_armado);
                 const horaLle = horaCorta(item.hora_llenado);
 
-                // Promedio real 30 días calculado desde lecturas_rfid
+                // Promedio real 30 días (RFID + histórico)
                 const prom = obtenerPromedioMolde(item);
                 let lineaPromedio = `<p><small style="color: var(--text-muted);">📈 <strong>Prom. real 30d:</strong> sin ciclos medidos</small></p>`;
                 if (prom) {
@@ -1225,12 +1273,12 @@
 
                 if (!res.ok) {
                     const detalle = await res.text();
-                    console.error("Supabase rechazó la marca manual:", detalle);
-                    alert(`❌ Supabase rechazó la marca (Status ${res.status}).\n${detalle}`);
+                    console.error("Supabase rechazó la marca manual en lecturas_rfid:", detalle);
+                    alert(`❌ lecturas_rfid rechazó la marca (Status ${res.status}).\n${detalle}`);
                     return;
                 }
 
-                alert(`✅ ${etapa} registrado para Molde #${nMolde} a las ${ahora.substring(11, 16)}.`);
+                alert(`✅ ${etapa} registrado en lecturas_rfid para Molde #${nMolde} a las ${ahora.substring(11, 16)}.`);
                 cargarPlanificacionData();
             } catch (err) {
                 console.error("Error registrando marca manual:", err);
@@ -1628,7 +1676,8 @@
         }
 
         /* 3. PROCESOS & TIEMPOS
-           Fuente: fn_tiempos_moldes / fn_ciclos_rfid (ciclos DESARMADO ➔ ARMADO calculados desde lecturas_rfid). */
+           Fuentes: fn_tiempos_moldes / fn_ciclos_unificados (RFID + historico_eficiencia_moldes)
+           y fn_resumen_eficiencia_diaria (eficiencia histórica por día). */
         async function cargarProcesosYTiemposData() {
             const containerEq = document.getElementById('view-proc-equipos');
             const info = document.getElementById('proc-info-periodo');
@@ -1643,23 +1692,149 @@
                 rangoProcesos = { desde, hasta };
 
                 info.innerText = fechaPuntual
-                    ? `Tiempo real = ciclo Desarmado ➔ Armado del día ${fechaPuntual.split('-').reverse().join('/')} (lecturas RFID + marcas manuales).`
-                    : `Tiempo real = promedio del ciclo Desarmado ➔ Armado (últimos 30 días, lecturas RFID + marcas manuales). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
+                    ? `Eficiencia y ciclos Desarmado ➔ Armado del ${diaSemana(fechaPuntual)} ${fechaAR(fechaPuntual)} (RFID + histórico).`
+                    : `Promedios de los últimos 30 días (RFID + histórico). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
 
-                const res = await fetchRpc('fn_tiempos_moldes', { p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT });
+                document.getElementById('kpis-proc-eficiencia').innerHTML = '<p style="color: var(--text-muted);">Cargando eficiencia...</p>';
 
-                if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
+                const [resTiempos, resDiario] = await Promise.all([
+                    fetchRpc('fn_tiempos_moldes', { p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT }),
+                    fetchRpc('fn_resumen_eficiencia_diaria', { p_desde: desde, p_hasta: hasta })
+                ]);
 
-                const data = await res.json();
-                cacheTiemposMoldes = Array.isArray(data) ? data : [];
+                if (!resTiempos.ok) throw new Error(`fn_tiempos_moldes → Status ${resTiempos.status}: ${await resTiempos.text()}`);
+
+                const dataTiempos = await resTiempos.json();
+                cacheTiemposMoldes = Array.isArray(dataTiempos) ? dataTiempos : [];
+
+                if (resDiario.ok) {
+                    const dataDiario = await resDiario.json();
+                    cacheResumenDiario = Array.isArray(dataDiario) ? dataDiario : [];
+                } else {
+                    console.warn('fn_resumen_eficiencia_diaria:', resDiario.status, await resDiario.text());
+                    cacheResumenDiario = [];
+                }
+
+                renderizarKpisEficiencia(fechaPuntual);
+                renderizarTablaDiaria(fechaPuntual);
 
                 // Re-renderiza el nivel en el que estaba el usuario
                 navegarProcesos(navProcesosEstado.nivel, navProcesosEstado.equipoSeleccionado, navProcesosEstado.familiaSeleccionada);
             } catch (err) {
                 console.error("Error cargando tiempos de moldes:", err);
+                document.getElementById('kpis-proc-eficiencia').innerHTML = '';
                 containerEq.style.display = 'grid';
-                containerEq.innerHTML = `<p style="color: var(--danger);">❌ Error al consultar fn_tiempos_moldes: ${err.message}</p>`;
+                containerEq.innerHTML = `<p style="color: var(--danger);">❌ Error al consultar los tiempos: ${err.message}</p>`;
             }
+        }
+
+        function badgeCumplimiento(pct) {
+            if (pct === null) return 'badge';
+            if (pct >= 90) return 'badge badge-success';
+            if (pct >= 70) return 'badge badge-warning';
+            return 'badge badge-danger';
+        }
+
+        function renderizarKpisEficiencia(fechaPuntual) {
+            const cont = document.getElementById('kpis-proc-eficiencia');
+            const dias = cacheResumenDiario;
+            const r = resumirTiempos(cacheTiemposMoldes);
+
+            if (dias.length === 0 && r.ciclos === 0) {
+                cont.innerHTML = `
+                    <div class="kpi-card" style="grid-column: 1 / -1; border-top: 3px solid var(--warning);">
+                        <div class="kpi-title">Sin registros</div>
+                        <div class="kpi-sub" style="font-size: 0.9rem;">No hay datos ${fechaPuntual ? `para el ${fechaAR(fechaPuntual)}` : 'en los últimos 30 días'} ni en historico_eficiencia_moldes ni en lecturas RFID.</div>
+                    </div>`;
+                return;
+            }
+
+            const programados = dias.reduce((a, d) => a + (parseInt(d.total_programados) || 0), 0);
+            const producidos = dias.reduce((a, d) => a + (parseInt(d.total_producido) || parseInt(d.moldes_terminados) || 0), 0);
+            const pctCumpl = programados > 0 ? (producidos / programados) * 100 : null;
+            const pctEnTiempo = r.ciclos > 0 ? 100 - r.pctIncumplimiento : null;
+            const etiqueta = fechaPuntual ? fechaAR(fechaPuntual) : `${dias.length} días con registro`;
+
+            cont.innerHTML = `
+                <div class="kpi-card" style="border-top: 3px solid var(--blue-info);">
+                    <div class="kpi-title">Moldes Programados</div>
+                    <div class="kpi-value" style="color: var(--blue-info);">${programados || '--'}</div>
+                    <div class="kpi-sub">${etiqueta}</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">Producidos</div>
+                    <div class="kpi-value" style="color: var(--accent-teal);">${producidos || '--'}</div>
+                    <div class="kpi-sub">historico_eficiencia_moldes</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid ${pctCumpl === null ? 'var(--border-color)' : (pctCumpl >= 90 ? 'var(--accent-teal)' : (pctCumpl >= 70 ? 'var(--warning)' : 'var(--danger)'))};">
+                    <div class="kpi-title">% Cumplimiento</div>
+                    <div class="kpi-value">${pctCumpl === null ? '--' : pctCumpl.toFixed(1) + '%'}</div>
+                    <div class="kpi-sub">producidos / programados</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--warning);">
+                    <div class="kpi-title">Tiempo Real Prom.</div>
+                    <div class="kpi-value" style="color: var(--warning);">${fmtMin(r.realProm)}</div>
+                    <div class="kpi-sub">obj. ${fmtMin(r.objProm)} · desvío ${fmtDesvio(r.desvProm)}</div>
+                </div>
+                <div class="kpi-card" style="border-top: 3px solid var(--accent-teal);">
+                    <div class="kpi-title">Ciclos en Tiempo</div>
+                    <div class="kpi-value" style="color: var(--accent-teal);">${pctEnTiempo === null ? '--' : pctEnTiempo.toFixed(1) + '%'}</div>
+                    <div class="kpi-sub">${r.ciclos} ciclos Desarmado ➔ Armado</div>
+                </div>
+            `;
+        }
+
+        function renderizarTablaDiaria(fechaPuntual) {
+            const card = document.getElementById('card-proc-diaria');
+            const cont = document.getElementById('tabla-proc-diaria');
+
+            if (fechaPuntual || cacheResumenDiario.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            card.style.display = 'block';
+
+            const dias = [...cacheResumenDiario].sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+            cont.innerHTML = `
+                <table class="table-teal">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Programados</th>
+                            <th>Producidos</th>
+                            <th>% Cumplimiento</th>
+                            <th>Moldes Registrados</th>
+                            <th>✅ En tiempo</th>
+                            <th>⚠️ Desvío</th>
+                            <th>🚨 Crítico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${dias.map(d => {
+                            const pct = num(d.pct_cumplimiento);
+                            return `
+                                <tr class="fila-interactiva" onclick="seleccionarDiaProcesos('${argJs(d.fecha)}')">
+                                    <td><strong>${diaSemana(d.fecha)} ${fechaAR(d.fecha)}</strong></td>
+                                    <td>${d.total_programados ?? '--'}</td>
+                                    <td>${d.total_producido ?? d.moldes_terminados ?? '--'}</td>
+                                    <td><span class="${badgeCumplimiento(pct)}">${pct === null ? '--' : pct.toFixed(1) + '%'}</span></td>
+                                    <td>${d.moldes_registrados ?? 0}</td>
+                                    <td>${d.ciclos_en_tiempo ?? 0}</td>
+                                    <td>${d.ciclos_con_desvio ?? 0}</td>
+                                    <td>${d.ciclos_criticos ?? 0}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function seleccionarDiaProcesos(fecha) {
+            document.getElementById('filtro-proc-fecha').value = String(fecha).substring(0, 10);
+            navProcesosEstado = { nivel: 'EQUIPOS', equipoSeleccionado: null, familiaSeleccionada: null };
+            cargarProcesosYTiemposData();
         }
 
         // Resumen ponderado por cantidad de ciclos (no promedio de promedios)
@@ -1821,6 +1996,7 @@
                             <th>Peor Desvío</th>
                             <th>% Fuera de Tiempo</th>
                             <th>Última Medición</th>
+                            <th>Fuente</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1832,7 +2008,6 @@
 
                             const desv = num(m.desvio_prom_min);
                             const colorDesv = desv === null ? 'var(--text-muted)' : (desv > 0 ? 'var(--warning)' : 'var(--accent-teal)');
-                            const ultima = m.ultima_medicion ? m.ultima_medicion.split('-').reverse().join('/') : '--';
 
                             return `
                                 <tr class="fila-interactiva" onclick="verCiclosMolde('${argJs(m.id_tag)}', '${argJs(m.n_molde)}', '${argJs(m.producto)}')">
@@ -1845,7 +2020,8 @@
                                     <td style="color: ${colorDesv};">${fmtDesvio(m.desvio_prom_min)}</td>
                                     <td style="color: var(--danger);">${fmtDesvio(m.peor_desvio_min)}</td>
                                     <td><span class="badge ${badge}">${pct.toFixed(1)}%</span></td>
-                                    <td><small>${ultima}</small></td>
+                                    <td><small>${fechaAR(m.ultima_medicion)}</small></td>
+                                    <td>${fuenteHtml(m.fuentes)}</td>
                                 </tr>
                             `;
                         }).join('')}
@@ -1857,19 +2033,21 @@
         // Detalle ciclo por ciclo de un molde (auditable: de dónde sale cada promedio)
         async function verCiclosMolde(idTag, nMolde, producto) {
             document.getElementById('modal-det-titulo').innerText = `Ciclos Molde #${nMolde} – ${producto}`;
-            document.getElementById('modal-det-badge').innerText = `${(rangoProcesos.desde || '').split('-').reverse().join('/')} → ${(rangoProcesos.hasta || '').split('-').reverse().join('/')}`;
-            document.getElementById('modal-det-body').innerHTML = '<p style="color: var(--text-muted);">Cargando ciclos desde lecturas RFID...</p>';
+            document.getElementById('modal-det-badge').innerText = rangoProcesos.desde === rangoProcesos.hasta
+                ? fechaAR(rangoProcesos.desde)
+                : `${fechaAR(rangoProcesos.desde)} → ${fechaAR(rangoProcesos.hasta)}`;
+            document.getElementById('modal-det-body').innerHTML = '<p style="color: var(--text-muted);">Cargando ciclos (RFID + histórico)...</p>';
             document.getElementById('modal-detalle').style.display = 'flex';
 
             try {
-                const res = await fetchRpc('fn_ciclos_rfid', { p_desde: rangoProcesos.desde, p_hasta: rangoProcesos.hasta });
+                const res = await fetchRpc('fn_ciclos_unificados', { p_desde: rangoProcesos.desde, p_hasta: rangoProcesos.hasta });
                 if (!res.ok) throw new Error(`Status ${res.status}: ${await res.text()}`);
 
                 const data = await res.json();
                 const tagBuscado = String(idTag || '').trim().toUpperCase();
                 const ciclos = (Array.isArray(data) ? data : [])
                     .filter(c => String(c.id_tag || '').trim().toUpperCase() === tagBuscado)
-                    .sort((a, b) => String(b.hora_desarmado).localeCompare(String(a.hora_desarmado)));
+                    .sort((a, b) => `${b.fecha}${b.hora_desarmado || ''}`.localeCompare(`${a.fecha}${a.hora_desarmado || ''}`));
 
                 if (ciclos.length === 0) {
                     document.getElementById('modal-det-body').innerHTML = '<p style="color: var(--text-muted);">No hay ciclos para este molde en el período.</p>';
@@ -1887,6 +2065,7 @@
                                 <th>Real</th>
                                 <th>Objetivo</th>
                                 <th>Desvío</th>
+                                <th>Fuente</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1895,12 +2074,13 @@
                                 const colorDesv = desv === null ? 'var(--text-muted)' : (desv > 0 ? 'var(--warning)' : 'var(--accent-teal)');
                                 return `
                                     <tr>
-                                        <td>${String(c.fecha || '').split('-').reverse().join('/')}</td>
+                                        <td>${fechaAR(c.fecha)}</td>
                                         <td>${horaCorta(c.hora_desarmado)}</td>
                                         <td>${horaCorta(c.hora_armado)}</td>
                                         <td style="font-weight:700;">${fmtMin(c.tiempo_ciclo_min)}</td>
                                         <td>${fmtMin(c.tiempo_objetivo_min)}</td>
                                         <td style="color: ${colorDesv};">${fmtDesvio(c.desvio_min)}</td>
+                                        <td>${fuenteHtml(c.fuente)}</td>
                                     </tr>
                                 `;
                             }).join('')}
@@ -1909,7 +2089,7 @@
                 `;
             } catch (err) {
                 console.error("Error cargando ciclos del molde:", err);
-                document.getElementById('modal-det-body').innerHTML = `<p style="color: var(--danger);">❌ Error al consultar fn_ciclos_rfid: ${err.message}</p>`;
+                document.getElementById('modal-det-body').innerHTML = `<p style="color: var(--danger);">❌ Error al consultar fn_ciclos_unificados: ${err.message}</p>`;
             }
         }
 
