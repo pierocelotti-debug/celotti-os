@@ -666,6 +666,13 @@
                         <option value="Verde">Verde</option>
                     </select>
                 </div>
+                <div class="filter-group">
+                    <label>Moldes:</label>
+                    <select id="filtro-plan-alcance" onchange="filtrarPlanificacion()">
+                        <option value="SI">✅ Solo planificados (Estado SI)</option>
+                        <option value="TODOS">Todos (incluye fuera de plan)</option>
+                    </select>
+                </div>
                 <!-- FOTO HISTÓRICA DE UN DÍA -->
                 <div class="filter-group">
                     <label>📸 Foto del día (histórico):</label>
@@ -691,6 +698,11 @@
             </div>
 
             <div class="kpi-container" id="kpis-plan-moldes">
+                <div class="kpi-card kpi-card-interactive" id="kpi-card-planificados" style="border-top: 3px solid var(--silver);" onclick="seleccionarFiltroKpi(null)">
+                    <div class="kpi-title">Moldes Planificados</div>
+                    <div class="kpi-value" id="kpi-moldes-planificados" style="color: var(--silver);">0</div>
+                    <div class="kpi-sub" id="kpi-moldes-fueraplan"></div>
+                </div>
                 <div class="kpi-card kpi-card-interactive" id="kpi-card-finalizados" style="border-top: 3px solid var(--accent-teal);" onclick="seleccionarFiltroKpi('FINALIZADO')">
                     <div class="kpi-title">Moldes Finalizados</div>
                     <div class="kpi-value" id="kpi-moldes-finalizados" style="color: var(--accent-teal);">0</div>
@@ -980,7 +992,7 @@
 
         // Tolerancia para considerar un ciclo "fuera de tiempo" (% sobre el objetivo)
         const TOLERANCIA_DESVIO_PCT = 10;
-        // A partir de este % sobre el objetivo, el ciclo se considera crítico (foto histórica)
+        // A partir de este % sobre el objetivo, el ciclo se considera crítico
         const UMBRAL_CRITICO_PCT = 50;
 
         // Banda sana de carga (minutos planificados / minutos disponibles)
@@ -1137,6 +1149,44 @@
             return tope ? Math.min(r, 1) : r;
         }
 
+        // "SI", "si", '{"Estado": "SI"}' -> true. Cualquier otra cosa -> false
+        function estadoSI(valor) {
+            let s = String(valor ?? '').trim();
+            const m = s.match(/"Estado"\s*:\s*"([^"]*)"/i);
+            if (m) s = m[1];
+            return s.trim().toUpperCase() === 'SI';
+        }
+
+        // Armadores/desarmadores que dividen el ciclo_min del equipo ese día:
+        // los que ficharon; si nadie fichó todavía, los esperados; mínimo 1
+        function divisorArmadores(equipo) {
+            const c = cacheCapacidad.find(x => x.tipo === 'MOLDES' && x.equipo === equipo);
+            if (!c) return { div: 1, fuente: 'sin datos de armadores' };
+            const pres = parseInt(c.presentes) || 0;
+            const esp = parseInt(c.esperados) || 0;
+            if (pres > 0) return { div: pres, fuente: `${pres} armador${pres === 1 ? '' : 'es'} presente${pres === 1 ? '' : 's'}` };
+            if (esp > 0) return { div: esp, fuente: `${esp} armador${esp === 1 ? '' : 'es'} esperado${esp === 1 ? '' : 's'}` };
+            return { div: 1, fuente: 'sin armadores cargados' };
+        }
+
+        // Objetivo real del molde = minutos de 1 persona ÷ armadores del equipo
+        function objetivoEquipo(cicloMinPersona, equipo) {
+            const p = num(cicloMinPersona);
+            if (p === null || p <= 0) return { objetivo: null, persona: null, div: null, fuente: '' };
+            const d = divisorArmadores(equipo);
+            return { objetivo: Math.round((p / d.div) * 10) / 10, persona: p, div: d.div, fuente: d.fuente };
+        }
+
+        // Semáforo de un ciclo contra el objetivo del equipo
+        function alertaCiclo(real, objetivo) {
+            const r = num(real), o = num(objetivo);
+            if (r === null || !o) return '⏳ SIN MEDICIÓN';
+            const pct = ((r - o) / o) * 100;
+            if (pct <= TOLERANCIA_DESVIO_PCT) return '✅ EN TIEMPO';
+            if (pct <= UMBRAL_CRITICO_PCT) return '⚠️ CON DESVIO';
+            return '🚨 CRITICO';
+        }
+
         function fuenteHtml(fuentes) {
             if (!fuentes) return '';
             return String(fuentes).split('+').map(f => f.trim()).filter(Boolean).map(f => {
@@ -1205,9 +1255,9 @@
         // Normaliza nombres para deduplicar: sin tildes, minúsculas, espacios simples y palabras ordenadas
         function normalizarNombre(s) {
             return (s || '')
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .toLowerCase()
-                .replace(/[\s\u00A0]+/g, ' ')
+                .replace(/[\s ]+/g, ' ')
                 .trim()
                 .split(' ')
                 .sort()
@@ -1325,11 +1375,20 @@
             return `${mins} min`;
         }
 
-        /* 1. PLANIFICACIÓN: TIEMPO REAL O FOTO HISTÓRICA DE UN DÍA */
+        /* 1. PLANIFICACIÓN: TIEMPO REAL O FOTO HISTÓRICA DE UN DÍA
+           Planificado = molde con Estado SI en planificacion_moldes.
+           Objetivo del molde = ciclo_min (minutos de 1 persona) ÷ armadores del equipo. */
 
         // Dataset activo de tarjetas según el modo
         function getDatasetPlan() {
             return modoFotoFecha ? cacheFotoDia : cacheEficienciaMoldes;
+        }
+
+        // Dataset según el selector "Moldes" (solo planificados o todos)
+        function datasetPorAlcance() {
+            const alcance = document.getElementById('filtro-plan-alcance').value;
+            const base = getDatasetPlan();
+            return alcance === 'SI' ? base.filter(m => m._planificado) : base;
         }
 
         async function cargarPlanificacionData() {
@@ -1361,18 +1420,14 @@
 
                 cacheDemandaOdoo = dem;
                 cacheMoldesPlanificacion = mol;
-                cacheCapacidad = capacidad;
+                cacheCapacidad = capacidad;   // antes de normalizar: el divisor de armadores sale de acá
 
                 if (modoFotoFecha) {
                     cacheFotoDia = moldesRaw
                         .map(normalizarFilaHistorica)
-                        .sort((a, b) =>
-                            String(a.equipo_planificacion || '').localeCompare(String(b.equipo_planificacion || '')) ||
-                            ((parseInt(a.n_molde) || 0) - (parseInt(b.n_molde) || 0)) ||
-                            String(a.producto || '').localeCompare(String(b.producto || ''))
-                        );
+                        .sort(ordenTarjetas);
                 } else {
-                    cacheEficienciaMoldes = moldesRaw.map((m, i) => ({ ...m, _key: `R${i}` }));
+                    cacheEficienciaMoldes = armarDatasetTiempoReal(moldesRaw);
                 }
 
                 // etapa -> primera zona configurada (se prefieren las zonas reales de antena)
@@ -1391,7 +1446,6 @@
 
                 renderizarBannerFoto();
                 renderizarCapacidadPlan();
-                actualizarKpisMoldes(getDatasetPlan());
                 filtrarPlanificacion();
                 renderizarDemandaOdoo(cacheDemandaOdoo);
                 renderizarMoldesPlanificacion(cacheMoldesPlanificacion);
@@ -1400,7 +1454,77 @@
             }
         }
 
-        /* Capacidad del día: armadores presentes × jornada vs minutos planificados */
+        function ordenTarjetas(a, b) {
+            return String(a.equipo_planificacion || '').localeCompare(String(b.equipo_planificacion || '')) ||
+                ((parseInt(a.n_molde) || 0) - (parseInt(b.n_molde) || 0)) ||
+                String(a.producto || '').localeCompare(String(b.producto || ''));
+        }
+
+        // Tiempo real: una tarjeta por cada molde con Estado SI (aunque todavía no tenga lecturas)
+        // + las filas del reporte que no corresponden a un molde planificado (marcadas como fuera de plan)
+        function armarDatasetTiempoReal(filas) {
+            const usados = new Set();
+            const resultado = filas.map((f, i) => {
+                const plan = planDeFila(f);
+                if (plan && plan.id_tag) usados.add(String(plan.id_tag).trim().toUpperCase());
+                return enriquecerTarjeta({ ...f, _key: `R${i}` }, plan, false);
+            });
+
+            cacheMoldesPlanificacion
+                .filter(m => estadoSI(m.Estado) && String(m.id_tag || '').trim())
+                .filter(m => !usados.has(String(m.id_tag).trim().toUpperCase()))
+                .forEach((m, i) => {
+                    resultado.push(enriquecerTarjeta({
+                        _key: `P${i}`,
+                        n_molde: m.n_molde,
+                        producto: m.nombre_simplificado || m.Familia || m.id_tag,
+                        id_tag: m.id_tag,
+                        equipo_planificacion: m.Equipo,
+                        hora_desarmado: null,
+                        hora_armado: null,
+                        hora_llenado: null,
+                        tiempo_real_min: null,
+                        estado_flujo: 'SIN INICIAR',
+                        _sinLecturas: true
+                    }, m, false));
+                });
+
+            return resultado.sort(ordenTarjetas);
+        }
+
+        // Busca el molde de planificacion_moldes de una fila (por tag o por n° + producto)
+        function planDeFila(f) {
+            const tag = String(f.id_tag || '').trim().toUpperCase();
+            if (tag) {
+                const porTag = cacheMoldesPlanificacion.find(m => String(m.id_tag || '').trim().toUpperCase() === tag);
+                if (porTag) return porTag;
+            }
+            return buscarMoldePlan(f.n_molde, f.producto, f.equipo_planificacion);
+        }
+
+        // Agrega a la tarjeta: si está planificado, el objetivo del equipo y el semáforo recalculado
+        function enriquecerTarjeta(item, plan, esFoto) {
+            const equipo = item.equipo_planificacion || plan?.Equipo || null;
+            const persona = num(plan?.ciclo_min) ?? num(item._objetivoPersonaOriginal ?? item.tiempo_objetivo_min);
+            const obj = objetivoEquipo(persona, equipo);
+            const real = num(item.tiempo_real_min);
+
+            return {
+                ...item,
+                id_tag: item.id_tag || plan?.id_tag || '',
+                producto: item.producto || plan?.nombre_simplificado || '--',
+                equipo_planificacion: equipo,
+                _planificado: plan ? estadoSI(plan.Estado) : false,
+                _objPersona: obj.persona,
+                _divisor: obj.div,
+                _divisorFuente: obj.fuente,
+                tiempo_objetivo_min: obj.objetivo,
+                desvio_min: (real !== null && obj.objetivo !== null) ? Math.round((real - obj.objetivo) * 10) / 10 : null,
+                alerta_productividad: (esFoto && item._secuenciaOk === false) ? '⏳ SIN MEDICIÓN' : alertaCiclo(real, obj.objetivo)
+            };
+        }
+
+        // Capacidad del día: armadores presentes × jornada vs minutos-persona planificados
         function renderizarCapacidadPlan() {
             const cont = document.getElementById('capacidad-plan');
             const fecha = modoFotoFecha || fechaLocalISO();
@@ -1429,6 +1553,8 @@
             const col = colorCarga(carga);
             const anchoPlan = disp ? Math.min(100, ((plan || 0) / disp) * 100) : 0;
             const anchoGan = disp ? Math.min(100, ((gan || 0) / disp) * 100) : 0;
+            const div = divisorArmadores(c.equipo).div;
+            const horasEquipo = div > 0 && plan ? plan / div : null;
 
             return `
                 <div class="card card-interactive" style="border-left: 4px solid ${col}; padding: 14px;" onclick="filtrarPorEquipoPlan('${argJs(c.equipo)}')">
@@ -1438,9 +1564,10 @@
                     </div>
                     <p><small>👥 <strong>Armadores:</strong> ${c.presentes} / ${c.esperados} presentes${parseInt(c.sin_tag) > 0 ? ` · <span style="color: var(--warning);">${c.sin_tag} sin tag</span>` : ''}</small></p>
                     ${c.ausentes ? `<p><small style="color: var(--warning);">🚫 Sin fichar: ${c.ausentes}</small></p>` : ''}
-                    <p><small>⏱️ <strong>Disponibles:</strong> ${fmtNum(disp, 0)} min <span style="color: var(--text-muted);">(de ${fmtNum(c.min_disponibles_teoricos, 0)} con todos)</span></small></p>
-                    <p><small>📋 <strong>Planificados:</strong> ${fmtNum(plan, 0)} min · ${c.moldes_programados} moldes</small></p>
-                    <p><small>✅ <strong>Ganados:</strong> ${fmtNum(gan, 0)} min · ${c.moldes_llenados} llenados</small></p>
+                    <p><small>⏱️ <strong>Disponibles:</strong> ${fmtNum(disp, 0)} min-persona <span style="color: var(--text-muted);">(de ${fmtNum(c.min_disponibles_teoricos, 0)} con todos)</span></small></p>
+                    <p><small>📋 <strong>Planificados:</strong> ${fmtNum(plan, 0)} min-persona · ${c.moldes_programados} moldes (Estado SI)</small></p>
+                    <p><small>⌛ <strong>Tiempo de equipo:</strong> ${horasEquipo !== null ? fmtNum(horasEquipo / 60, 1) + ' h' : '--'} <span style="color: var(--text-muted);">(÷ ${div} armador${div === 1 ? '' : 'es'})</span></small></p>
+                    <p><small>✅ <strong>Ganados:</strong> ${fmtNum(gan, 0)} min-persona · ${c.moldes_llenados} llenados</small></p>
                     <div class="cap-barra" title="Azul: planificado · Verde: ganado (sobre minutos disponibles)">
                         <div class="cap-plan" style="width: ${anchoPlan}%;"></div>
                         <div class="cap-gan" style="width: ${anchoGan}%;"></div>
@@ -1461,7 +1588,7 @@
                     <p><small>👥 <strong>Llenadores presentes:</strong> ${c.presentes} de ${c.esperados}${parseInt(c.sin_tag) > 0 ? ` · <span style="color: var(--warning);">${c.sin_tag} sin tag</span>` : ''}</small></p>
                     ${c.ausentes ? `<p><small style="color: var(--warning);">🚫 Sin fichar: ${c.ausentes}</small></p>` : ''}
                     <p><small>⏱️ <strong>Disponibles:</strong> ${fmtNum(c.min_disponibles, 0)} min</small></p>
-                    <p><small>🧱 <strong>Moldes llenados (planta):</strong> ${c.moldes_llenados} de ${c.moldes_programados} programados</small></p>
+                    <p><small>🧱 <strong>Moldes llenados (planta):</strong> ${c.moldes_llenados} de ${c.moldes_programados} planificados</small></p>
                     <p><small>📈 <strong>Moldes por llenador:</strong> ${fmtNum(porLlenador, 1)}</small></p>
                     <div class="kpi-sub">Llena los moldes de todos los equipos: se mide con los llenados de toda la planta.</div>
                 </div>
@@ -1498,7 +1625,8 @@
             return (m ? m[1] : s).trim().toUpperCase();
         }
 
-        // Busca en planificacion_moldes el molde de una fila del histórico (id_tag suele venir vacío)
+        // Busca en planificacion_moldes el molde de una fila (id_tag suele venir vacío en el histórico).
+        // Ante empate se prefiere el que tiene Estado SI.
         function buscarMoldePlan(nMolde, producto, equipo) {
             const candidatos = cacheMoldesPlanificacion.filter(m => String(m.n_molde ?? '') === String(nMolde ?? '').trim());
             if (candidatos.length === 0) return null;
@@ -1514,7 +1642,9 @@
                 else if (c && prodU.includes(c)) s += 6;
                 if (n && n === prodU) s += 8;
                 else if (n && prodU.includes(n)) s += 4;
+                else if (n && n.includes(cod) && cod) s += 4;
                 if ((m.Equipo || '') === (equipo || '')) s += 2;
+                if (estadoSI(m.Estado)) s += 1;
                 return s;
             };
 
@@ -1528,14 +1658,13 @@
             const tDes = parseHoraTs(h.hora_desarmado, h.fecha);
             const tArm = parseHoraTs(h.hora_armado, h.fecha);
             const tLle = parseHoraTs(h.hora_llenado, h.fecha);
-            const plan = buscarMoldePlan(h.n_molde, h.producto, h.equipo_planificacion);
+            const plan = planDeFila(h);
 
             let secuenciaOk = true;
             if (tDes && tArm && tArm < tDes) secuenciaOk = false;
             if (tArm && tLle && tLle < tArm) secuenciaOk = false;
             if (tDes && tLle && !tArm && tLle < tDes) secuenciaOk = false;
 
-            const objetivo = num(h.tiempo_objetivo_min) ?? num(plan?.ciclo_min);
             let real = num(h.tiempo_real_min);
             if (real === null && tDes && tArm && tArm > tDes) {
                 real = Math.round((tArm - tDes) / 6000) / 10;
@@ -1546,33 +1675,15 @@
             else if (tArm) estado = 'POR LLENAR';
             else if (tDes) estado = 'ARMANDO';
 
-            let alerta = '⏳ SIN MEDICIÓN';
-            const sem = String(h.semaforo_estado || '').toUpperCase();
-            if (sem.includes('CRIT')) alerta = '🚨 CRITICO';
-            else if (sem.includes('DESV')) alerta = '⚠️ CON DESVIO';
-            else if (sem.includes('TIEMPO')) alerta = '✅ EN TIEMPO';
-            else if (real !== null && objetivo) {
-                const pct = ((real - objetivo) / objetivo) * 100;
-                if (pct <= TOLERANCIA_DESVIO_PCT) alerta = '✅ EN TIEMPO';
-                else if (pct <= UMBRAL_CRITICO_PCT) alerta = '⚠️ CON DESVIO';
-                else alerta = '🚨 CRITICO';
-            }
-
-            return {
+            return enriquecerTarjeta({
                 ...h,
                 _key: `H${h.id}`,
                 _historico: true,
                 _secuenciaOk: secuenciaOk,
-                _objetivoDesdePlan: num(h.tiempo_objetivo_min) === null && objetivo !== null,
-                id_tag: h.id_tag || plan?.id_tag || '',
-                producto: h.producto || plan?.nombre_simplificado || '--',
-                equipo_planificacion: h.equipo_planificacion || plan?.Equipo || null,
-                tiempo_objetivo_min: objetivo,
+                _objetivoPersonaOriginal: h.tiempo_objetivo_min,
                 tiempo_real_min: real,
-                desvio_min: num(h.desvio_min) ?? ((real !== null && objetivo !== null) ? Math.round((real - objetivo) * 10) / 10 : null),
-                estado_flujo: estado,
-                alerta_productividad: alerta
-            };
+                estado_flujo: estado
+            }, plan, true);
         }
 
         // Resumen planificado vs producido del día seleccionado
@@ -1585,21 +1696,20 @@
             banner.style.display = 'block';
 
             const titulo = `<h3 style="margin: 0; color: var(--gold);">📸 Foto del ${diaSemana(modoFotoFecha)} ${fechaAR(modoFotoFecha)}</h3>`;
-            const d = cacheFotoDia;
+            const d = datasetPorAlcance();
 
             if (d.length === 0) {
-                banner.innerHTML = `${titulo}<p style="color: var(--text-muted); margin: 8px 0 0;">No hay registros en historico_eficiencia_moldes para este día.</p>`;
+                banner.innerHTML = `${titulo}<p style="color: var(--text-muted); margin: 8px 0 0;">No hay registros en historico_eficiencia_moldes para este día con el alcance elegido.</p>`;
                 return;
             }
 
-            const maxCampo = campo => Math.max(0, ...d.map(x => parseInt(x[campo]) || 0));
             const finalizados = d.filter(x => x.estado_flujo === 'FINALIZADO').length;
-            const programados = maxCampo('total_moldes_programados') || d.length;
-            const producidos = maxCampo('total_producido_hoy') || finalizados;
-            const pctCumpl = programados > 0 ? (producidos / programados) * 100 : null;
+            const programados = d.length;
+            const pctCumpl = programados > 0 ? (finalizados / programados) * 100 : null;
             const sinIniciar = d.filter(x => x.estado_flujo === 'SIN INICIAR').length;
+            const fueraPlan = cacheFotoDia.filter(x => !x._planificado).length;
 
-            const medidos = d.filter(x => num(x.tiempo_real_min) !== null);
+            const medidos = d.filter(x => num(x.tiempo_real_min) !== null && x._secuenciaOk);
             const realProm = medidos.length ? medidos.reduce((a, x) => a + num(x.tiempo_real_min), 0) / medidos.length : null;
             const conObj = medidos.filter(x => num(x.tiempo_objetivo_min) !== null);
             const objProm = conObj.length ? conObj.reduce((a, x) => a + num(x.tiempo_objetivo_min), 0) / conObj.length : null;
@@ -1616,15 +1726,16 @@
 
             banner.innerHTML = `
                 ${titulo}
-                <p style="color: var(--text-muted); margin: 4px 0 0; font-size: 0.85rem;">Planificado vs. producido según historico_eficiencia_moldes. Los botones manuales se desactivan en modo foto.</p>
+                <p style="color: var(--text-muted); margin: 4px 0 0; font-size: 0.85rem;">Planificado vs. producido según historico_eficiencia_moldes. El objetivo de cada molde es ciclo_min ÷ armadores presentes ese día. Los botones manuales se desactivan en modo foto.</p>
                 <div class="foto-stats">
                     <div class="foto-stat">
                         <div class="kpi-title">Programados</div>
                         <div class="valor" style="color: var(--blue-info);">${programados}</div>
+                        ${fueraPlan ? `<div class="kpi-sub">+${fueraPlan} fuera de plan</div>` : ''}
                     </div>
                     <div class="foto-stat">
                         <div class="kpi-title">Producidos (llenados)</div>
-                        <div class="valor" style="color: var(--accent-teal);">${producidos}</div>
+                        <div class="valor" style="color: var(--accent-teal);">${finalizados}</div>
                     </div>
                     <div class="foto-stat">
                         <div class="kpi-title">% Cumplimiento</div>
@@ -1637,7 +1748,7 @@
                     <div class="foto-stat">
                         <div class="kpi-title">Tiempo Real Prom.</div>
                         <div class="valor" style="color: var(--warning);">${fmtMin(realProm)}</div>
-                        <div class="kpi-sub">obj. ${fmtMin(objProm)} · ${medidos.length} medidos</div>
+                        <div class="kpi-sub">obj. equipo ${fmtMin(objProm)} · ${medidos.length} medidos</div>
                     </div>
                     <div class="foto-stat">
                         <div class="kpi-title">Ciclos en Tiempo</div>
@@ -1671,8 +1782,17 @@
             document.getElementById('banner-foto').style.display = (esMonitoreo && modoFotoFecha) ? 'block' : 'none';
         }
 
+        // Contadores de las tarjetas iniciales (sobre el alcance y equipo elegidos)
         function actualizarKpisMoldes(data) {
             if (!Array.isArray(data)) return;
+            const equipo = document.getElementById('filtro-plan-equipo').value;
+            const base = getDatasetPlan().filter(m => equipo === 'TODOS' || m.equipo_planificacion === equipo);
+            const fueraPlan = base.filter(m => !m._planificado).length;
+
+            document.getElementById('kpi-moldes-planificados').innerText = data.filter(m => m._planificado).length;
+            document.getElementById('kpi-moldes-fueraplan').innerText = fueraPlan
+                ? `${fueraPlan} con lecturas fuera de plan${document.getElementById('filtro-plan-alcance').value === 'SI' ? ' (ocultos)' : ''}`
+                : 'Estado SI en planificacion_moldes';
             document.getElementById('kpi-moldes-finalizados').innerText = data.filter(m => m.estado_flujo === 'FINALIZADO').length;
             document.getElementById('kpi-moldes-porllenar').innerText = data.filter(m => m.estado_flujo === 'POR LLENAR').length;
             document.getElementById('kpi-moldes-armando').innerText = data.filter(m => m.estado_flujo === 'ARMANDO').length;
@@ -1682,7 +1802,7 @@
         function seleccionarFiltroKpi(estado) {
             document.querySelectorAll('#kpis-plan-moldes .kpi-card-interactive').forEach(card => card.classList.remove('active-filter'));
 
-            if (filtroEstadoKpiActivo === estado) {
+            if (estado === null || filtroEstadoKpiActivo === estado) {
                 filtroEstadoKpiActivo = null;
             } else {
                 filtroEstadoKpiActivo = estado;
@@ -1693,6 +1813,11 @@
             }
 
             filtrarPlanificacion();
+        }
+
+        function textoObjetivo(item) {
+            if (num(item.tiempo_objetivo_min) === null) return '<span style="color: var(--warning);">sin ciclo_min</span>';
+            return `${fmtMin(item.tiempo_objetivo_min)} <span style="color: var(--text-muted);">(${fmtNum(item._objPersona, 0)} min/persona ÷ ${item._divisor})</span>`;
         }
 
         function renderizarRealtimeMoldes(data) {
@@ -1742,9 +1867,10 @@
                         · ${prom.ciclos_medidos} ciclos</small></p>`;
                 }
 
-                const textoReal = esFoto
-                    ? (num(item.tiempo_real_min) !== null ? `${fmtMin(item.tiempo_real_min)} <span style="color: ${num(item.desvio_min) > 0 ? 'var(--warning)' : 'var(--accent-teal)'};">(${fmtDesvio(item.desvio_min)})</span>` : 'Sin medición')
-                    : (item.tiempo_real_min ? item.tiempo_real_min + ' min' : 'En proceso');
+                const real = num(item.tiempo_real_min);
+                const textoReal = real !== null
+                    ? `${fmtMin(real)} <span style="color: ${num(item.desvio_min) > 0 ? 'var(--warning)' : 'var(--accent-teal)'};">(${fmtDesvio(item.desvio_min)})</span>`
+                    : (esFoto ? 'Sin medición' : (item._sinLecturas ? 'Sin lecturas' : 'En proceso'));
 
                 const argsMolde = `'${argJs(item.n_molde)}', '${argJs(item.producto)}', '${argJs(item.id_tag || '')}'`;
 
@@ -1758,14 +1884,16 @@
                         </div>`;
 
                 return `
-                    <div class="card" style="border-left: 4px solid ${borderColor};">
+                    <div class="card" style="border-left: 4px solid ${borderColor};${item._planificado ? '' : ' opacity: 0.75; border-style: dashed;'}">
                         <div class="card-header" onclick="verTrazaMolde('${argJs(item._key)}')" style="cursor:pointer;">
-                            <span>Molde #${item.n_molde}</span>
+                            <span>Molde #${item.n_molde ?? '--'}</span>
                             ${badgeEstado}
                         </div>
                         <p style="font-size: 0.9rem; font-weight: 600; margin: 4px 0;">${item.producto}</p>
+                        ${item._planificado ? '' : '<div class="aviso-secuencia">📌 Fuera de plan: el molde no tiene Estado SI en planificacion_moldes</div>'}
                         <p><small>👥 <strong>Equipo:</strong> ${item.equipo_planificacion || 'Sin Asignar'}</small></p>
-                        <p><small>⏱️ <strong>Obj:</strong> ${item.tiempo_objetivo_min ?? '--'} min | <strong>${esFoto ? 'Real del día' : 'Real hoy'}:</strong> ${textoReal}</small></p>
+                        <p><small>⏱️ <strong>Obj. equipo:</strong> ${textoObjetivo(item)}</small></p>
+                        <p><small>⏱️ <strong>${esFoto ? 'Real del día' : 'Real hoy'}:</strong> ${textoReal}</small></p>
                         ${lineaPromedio}
                         ${esFoto && !item._secuenciaOk ? `<div class="aviso-secuencia">⚠️ Secuencia de lecturas inconsistente (revisar antenas)</div>` : ''}
                         
@@ -1797,7 +1925,7 @@
             const plan = buscarMoldePlan(nMolde, producto, null);
             if (plan) return plan.id_tag;
 
-            const activos = candidatos.filter(m => (m.Estado || '').toUpperCase() === 'SI');
+            const activos = candidatos.filter(m => estadoSI(m.Estado));
             if (activos.length === 1) return activos[0].id_tag;
 
             return null;
@@ -1867,20 +1995,21 @@
             if (!m) return;
 
             const esFoto = !!m._historico;
-            document.getElementById('modal-molde-titulo').innerText = `Molde #${m.n_molde} - ${m.producto}${esFoto ? ` (📸 ${fechaAR(m.fecha)})` : ''}`;
+            document.getElementById('modal-molde-titulo').innerText = `Molde #${m.n_molde ?? '--'} - ${m.producto}${esFoto ? ` (📸 ${fechaAR(m.fecha)})` : ''}`;
             document.getElementById('modal-molde-estado').innerText = m.estado_flujo;
 
             const formatHora = (str) => {
-                const d = parseHoraTs(str, m.fecha);
+                const d = parseHoraTs(str, m.fecha || fechaLocalISO());
                 return d ? d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Sin registro';
             };
             const prom = obtenerPromedioMolde(m);
 
             document.getElementById('modal-molde-body').innerHTML = `
-                <p><strong>Equipo Planificado:</strong> ${m.equipo_planificacion || 'Sin Asignar'}</p>
-                <p><strong>Tiempo Objetivo Armado:</strong> ${m.tiempo_objetivo_min ?? '--'} minutos ${m._objetivoDesdePlan ? '<small style="color: var(--text-muted);">(desde planificacion_moldes.ciclo_min)</small>' : ''}</p>
+                <p><strong>Equipo Planificado:</strong> ${m.equipo_planificacion || 'Sin Asignar'} · ${m._planificado ? '<span style="color: var(--accent-teal);">Estado SI (planificado)</span>' : '<span style="color: var(--warning);">fuera de plan</span>'}</p>
+                <p><strong>Tiempo objetivo del molde (1 persona):</strong> ${m._objPersona !== null ? fmtMin(m._objPersona) : 'sin ciclo_min cargado'}</p>
+                <p><strong>Tiempo objetivo del equipo:</strong> ${num(m.tiempo_objetivo_min) !== null ? `<span style="color: var(--accent-teal); font-weight: 700;">${fmtMin(m.tiempo_objetivo_min)}</span> = ${fmtNum(m._objPersona, 0)} min ÷ ${m._divisor} (${m._divisorFuente})` : '--'}</p>
                 <p><strong>${esFoto ? 'Tiempo Real del Día' : 'Tiempo Real Medido Hoy'}:</strong> ${num(m.tiempo_real_min) !== null ? fmtMin(m.tiempo_real_min) : (esFoto ? 'Sin medición' : 'En ejecución')}</p>
-                ${esFoto ? `<p><strong>Desvío del Día:</strong> ${fmtDesvio(m.desvio_min)}</p>` : ''}
+                <p><strong>Desvío vs. objetivo del equipo:</strong> ${fmtDesvio(m.desvio_min)}</p>
                 <p><strong>Promedio Real 30 días:</strong> ${prom ? `${fmtMin(prom.tiempo_real_prom_min)} en ${prom.ciclos_medidos} ciclos (${fmtDesvio(prom.desvio_prom_min)} vs objetivo)` : 'Sin ciclos medidos'}</p>
                 <p><strong>Estado Productividad:</strong> ${m.alerta_productividad}</p>
                 ${esFoto && !m._secuenciaOk ? `<div class="aviso-secuencia">⚠️ Las marcas no siguen el orden Desarmado ➔ Armado ➔ Llenado. Probablemente se mezclaron lecturas de ciclos distintos; el tiempo de este registro no se usa en los promedios.</div>` : ''}
@@ -1911,18 +2040,19 @@
             const texto = document.getElementById('filtro-plan-texto').value.toLowerCase();
             const equipo = document.getElementById('filtro-plan-equipo').value;
 
-            const moldesFiltrados = getDatasetPlan().filter(m => {
+            const baseAlcance = datasetPorAlcance().filter(m => {
                 const coincideTexto = (m.producto || '').toLowerCase().includes(texto) || String(m.n_molde ?? '').includes(texto);
                 const coincideEquipo = (equipo === 'TODOS') || (m.equipo_planificacion === equipo);
-                
-                let coincideKpi = true;
-                if (filtroEstadoKpiActivo === 'CRITICO') {
-                    coincideKpi = (m.alerta_productividad === '🚨 CRITICO');
-                } else if (filtroEstadoKpiActivo) {
-                    coincideKpi = (m.estado_flujo === filtroEstadoKpiActivo);
-                }
+                return coincideTexto && coincideEquipo;
+            });
 
-                return coincideTexto && coincideEquipo && coincideKpi;
+            actualizarKpisMoldes(baseAlcance);
+            if (modoFotoFecha) renderizarBannerFoto();
+
+            const moldesFiltrados = baseAlcance.filter(m => {
+                if (filtroEstadoKpiActivo === 'CRITICO') return m.alerta_productividad === '🚨 CRITICO';
+                if (filtroEstadoKpiActivo) return m.estado_flujo === filtroEstadoKpiActivo;
+                return true;
             });
             renderizarRealtimeMoldes(moldesFiltrados);
 
@@ -1934,8 +2064,9 @@
             renderizarDemandaOdoo(demandaFiltrada);
 
             const matrizFiltrada = cacheMoldesPlanificacion.filter(m =>
-                (m.nombre_simplificado || '').toLowerCase().includes(texto) ||
-                (m.Familia || '').toLowerCase().includes(texto)
+                ((m.nombre_simplificado || '').toLowerCase().includes(texto) ||
+                (m.Familia || '').toLowerCase().includes(texto)) &&
+                (equipo === 'TODOS' || m.Equipo === equipo)
             );
             renderizarMoldesPlanificacion(matrizFiltrada);
         }
@@ -1967,21 +2098,26 @@
                 return;
             }
 
-            container.innerHTML = data.map(molde => {
-                const estaActivo = (molde.Estado || '').toUpperCase() === 'SI';
+            // Primero los planificados (SI), después el resto
+            const ordenados = [...data].sort((a, b) => (estadoSI(b.Estado) ? 1 : 0) - (estadoSI(a.Estado) ? 1 : 0));
+
+            container.innerHTML = ordenados.map(molde => {
+                const estaActivo = estadoSI(molde.Estado);
                 const prom = cachePromediosMoldes.get(`T:${String(molde.id_tag || '').trim().toUpperCase()}`);
+                const obj = objetivoEquipo(molde.ciclo_min, molde.Equipo);
                 return `
                     <div class="card" style="border-left: 4px solid ${estaActivo ? 'var(--accent-teal)' : 'var(--danger)'};">
                         <div class="card-header">
-                            <span>${molde.nombre_simplificado || 'Sin Nombre'}</span>
-                            <span class="badge ${estaActivo ? 'badge-success' : 'badge-danger'}">${molde.Estado || 'NO'}</span>
+                            <span>${molde.nombre_simplificado || molde.Familia || 'Sin Nombre'}</span>
+                            <span class="badge ${estaActivo ? 'badge-success' : 'badge-danger'}">${estaActivo ? 'SI' : 'NO'}</span>
                         </div>
-                        <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag} | <strong>N°:</strong> ${molde.n_molde ?? '--'}</small></p>
+                        <p><small>🏷️ <strong>TAG:</strong> ${molde.id_tag || '--'} | <strong>N°:</strong> ${molde.n_molde ?? '--'}</small></p>
                         <p><small>📁 <strong>Familia:</strong> ${molde.Familia || 'N/A'} | 👥 <strong>Equipo:</strong> ${molde.Equipo || 'N/A'}</small></p>
-                        <p><small>⏱️ <strong>Ciclo objetivo:</strong> ${molde.ciclo_min ?? '<span style="color: var(--warning);">sin cargar</span>'} min | <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
+                        <p><small>⏱️ <strong>Ciclo 1 persona:</strong> ${molde.ciclo_min ?? '<span style="color: var(--warning);">sin cargar</span>'} min | <strong>Obj. equipo hoy:</strong> ${obj.objetivo !== null ? `${fmtMin(obj.objetivo)} (÷ ${obj.div})` : '--'}</small></p>
+                        <p><small>📈 <strong>Real 30d:</strong> ${prom ? fmtMin(prom.tiempo_real_prom_min) : 'sin datos'}</small></p>
                         <p><small>⚖️ <strong>Peso:</strong> ${molde.peso_kg ?? '--'} kg | 💲 <strong>Costo:</strong> ${molde.costo_estandar != null ? fmtMoneda(molde.costo_estandar) : '--'} | <strong>Precio:</strong> ${molde.precio_venta != null ? fmtMoneda(molde.precio_venta) : '--'}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
-                            <button class="${estaActivo ? 'btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${argJs(molde.Estado)}')">
+                            <button class="${estaActivo ? 'btn btn-danger' : 'btn'}" style="font-size:0.8rem;" onclick="toggleEstadoMolde('${argJs(molde.id_tag)}', '${estaActivo ? 'SI' : 'NO'}')">
                                 ${estaActivo ? 'Desactivar (NO)' : 'Activar (SI)'}
                             </button>
                         </div>
@@ -1990,8 +2126,9 @@
             }).join('');
         }
 
+        // Siempre graba "SI" o "NO" como texto plano (nunca {"Estado": ...})
         async function toggleEstadoMolde(idTag, estadoActual) {
-            const nuevoEstado = (estadoActual || '').toUpperCase() === 'SI' ? 'NO' : 'SI';
+            const nuevoEstado = estadoSI(estadoActual) ? 'NO' : 'SI';
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?id_tag=eq.${encodeURIComponent(idTag)}`, {
                     method: 'PATCH',
@@ -2258,7 +2395,8 @@
         }
 
         /* 3. PROCESOS & TIEMPOS
-           Fuente: fn_tiempos_moldes / fn_ciclos_unificados (RFID + historico_eficiencia_moldes). */
+           Fuente: fn_tiempos_moldes / fn_ciclos_unificados (RFID + historico_eficiencia_moldes).
+           El objetivo de cada ciclo ya viene dividido por los armadores del equipo ese día. */
         async function cargarProcesosYTiemposData() {
             const containerEq = document.getElementById('view-proc-equipos');
             const info = document.getElementById('proc-info-periodo');
@@ -2273,8 +2411,8 @@
                 rangoProcesos = { desde, hasta };
 
                 info.innerText = fechaPuntual
-                    ? `Ciclos Desarmado ➔ Armado del ${diaSemana(fechaPuntual)} ${fechaAR(fechaPuntual)} (RFID + histórico).`
-                    : `Promedios de los últimos 30 días (RFID + histórico). Tolerancia: ${TOLERANCIA_DESVIO_PCT}% sobre el objetivo.`;
+                    ? `Ciclos Desarmado ➔ Armado del ${diaSemana(fechaPuntual)} ${fechaAR(fechaPuntual)} (RFID + histórico). Objetivo = ciclo_min ÷ armadores del equipo.`
+                    : `Promedios de los últimos 30 días (RFID + histórico). Objetivo = ciclo_min ÷ armadores del equipo. Tolerancia: ${TOLERANCIA_DESVIO_PCT}%.`;
 
                 const res = await fetchRpc('fn_tiempos_moldes', { p_desde: desde, p_hasta: hasta, p_tolerancia_pct: TOLERANCIA_DESVIO_PCT });
 
@@ -2373,7 +2511,7 @@
                             <span class="badge ${moldesEquipo.length ? col.badge : ''}">${r.pctIncumplimiento.toFixed(1)}% fuera de tiempo</span>
                         </div>
                         <p>📋 Moldes con mediciones: <strong>${moldesEquipo.length}</strong></p>
-                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. ${fmtMin(r.objProm)})</small></p>
+                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. equipo ${fmtMin(r.objProm)})</small></p>
                         <p>📈 Desvío Promedio: <strong>${fmtDesvio(r.desvProm)}</strong></p>
                         <p><small>📊 Ciclos Desarmado ➔ Armado medidos: ${r.ciclos}</small></p>
                         <div style="margin-top: 12px; text-align: right;">
@@ -2413,7 +2551,7 @@
                             <span>Familia: ${fam}</span>
                             <span class="badge badge-info">${familiasMap[fam].length} Moldes</span>
                         </div>
-                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. ${fmtMin(r.objProm)})</small></p>
+                        <p>⏱️ Tiempo Real Promedio: <strong>${fmtMin(r.realProm)}</strong> <small style="color:var(--text-muted);">(obj. equipo ${fmtMin(r.objProm)})</small></p>
                         <p>📈 Desvío Promedio: <strong>${fmtDesvio(r.desvProm)}</strong></p>
                         <p><small>📊 ${r.ciclos} ciclos | <span class="badge ${col.badge}">${r.pctIncumplimiento.toFixed(1)}% fuera de tiempo</span></small></p>
                         <div style="margin-top: 12px; text-align: right;">
@@ -2436,14 +2574,14 @@
             }
 
             container.innerHTML = `
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 6px;">👆 Hacé clic en un molde para ver cada ciclo medido.</p>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0 0 6px;">👆 Hacé clic en un molde para ver cada ciclo medido. El objetivo es el promedio de ciclo_min ÷ armadores presentes en cada día medido.</p>
                 <table class="table-teal">
                     <thead>
                         <tr>
                             <th>N° Molde</th>
                             <th>Producto</th>
                             <th>Ciclos</th>
-                            <th>Tiempo Objetivo</th>
+                            <th>Obj. Equipo</th>
                             <th>Tiempo Real Promedio</th>
                             <th>Mín – Máx</th>
                             <th>Desvío Promedio</th>
@@ -2509,7 +2647,7 @@
                 }
 
                 document.getElementById('modal-det-body').innerHTML = `
-                    <p><small style="color: var(--text-muted);">🏷️ Tag: <code>${idTag}</code> · ${ciclos.length} ciclos medidos</small></p>
+                    <p><small style="color: var(--text-muted);">🏷️ Tag: <code>${idTag}</code> · ${ciclos.length} ciclos medidos · Objetivo = ciclo_min ÷ armadores presentes ese día</small></p>
                     <table class="table-teal">
                         <thead>
                             <tr>
@@ -2517,7 +2655,7 @@
                                 <th>🔓 Desarmado</th>
                                 <th>🔒 Armado</th>
                                 <th>Real</th>
-                                <th>Objetivo</th>
+                                <th>Obj. Equipo</th>
                                 <th>Desvío</th>
                                 <th>Fuente</th>
                             </tr>
@@ -2882,9 +3020,9 @@
         const KPI_TEAL = [
             {
                 id: 'oee', n: 1, icono: '⚙️', titulo: 'OEE de Molde', tipo: 'pct', metaSugerida: 0.65, serie: 'oee',
-                descripcion: 'Cuánto del potencial de cada molde se convierte en piezas buenas. Junta en un número las tres pérdidas: molde parado, molde lento y pieza defectuosa.',
-                formula: 'Disponibilidad × Rendimiento × Calidad. Disponibilidad = molde-días con actividad / molde-días activos disponibles. Rendimiento = Σ ciclo objetivo / Σ ciclo real (tope 100%). Calidad = FPY de desmolde.',
-                fuente: 'kpi_diario · kpi_molde_diario (desde historico_eficiencia_moldes, lecturas_rfid y registro_desmolde_calidad)',
+                descripcion: 'Cuánto del potencial de cada molde planificado se convierte en piezas buenas. Junta en un número las tres pérdidas: molde parado, molde lento y pieza defectuosa.',
+                formula: 'Disponibilidad × Rendimiento × Calidad. Disponibilidad = molde-días con actividad / molde-días planificados (Estado SI). Rendimiento = Σ objetivo del equipo / Σ ciclo real (tope 100%), con objetivo del equipo = ciclo_min ÷ armadores presentes ese día. Calidad = FPY de desmolde.',
+                fuente: 'kpi_diario · kpi_molde_diario (desde lecturas_rfid, historico_eficiencia_moldes, registro_desmolde_calidad, Personas y planificacion_moldes)',
                 valor: (e) => e?.oee,
                 sub: (e, d) => e ? `Disp. ${fmtPct(e.disponibilidad)} · Rend. ${fmtPct(capUno(e.rendimiento))} · Cal. ${fmtPct(e.calidad ?? datoEquipo(d, 'PLANTA')?.calidad)}` : '',
                 estado: (e) => !e || e.oee == null ? 'sin' : ((e.ciclos === 0 || e.calidad_es_planta) ? 'parcial' : 'ok'),
@@ -2898,14 +3036,14 @@
             },
             {
                 id: 'giros', n: 2, icono: '🔄', titulo: 'Giros por Molde', tipo: 'dec2', unidad: 'giros/molde·día', metaSugerida: 0.9,
-                descripcion: 'Cuántos llenados hace cada molde activo por día. Crecer en giros es crecer sin comprar moldes nuevos.',
-                formula: 'Eventos de LLENADO por antena (separados más de 60 min) / molde-días activos disponibles. Molde ocioso = activo sin ningún llenado en el período.',
+                descripcion: 'Cuántos llenados hace cada molde planificado por día. Crecer en giros es crecer sin comprar moldes nuevos.',
+                formula: 'Eventos de LLENADO por antena (separados más de 60 min) / molde-días planificados (Estado SI) en días con producción. Molde ocioso = planificado sin ningún llenado en el período.',
                 fuente: 'kpi_molde_diario (desde lecturas_rfid zona Llenado + planificacion_moldes Estado = SI)',
                 valor: (e) => e?.giros,
-                sub: (e) => e ? `${e.eventos_llenado} llenados · ${e.moldes_activos} moldes activos · ${e.moldes_ociosos} ociosos` : '',
+                sub: (e) => e ? `${e.eventos_llenado} llenados · ${e.moldes_activos} moldes planificados · ${e.moldes_ociosos} ociosos` : '',
                 estado: (e) => !e || !e.moldes_activos ? 'sin' : 'ok',
                 columnas: [
-                    ['Moldes activos', e => e.moldes_activos],
+                    ['Moldes planificados', e => e.moldes_activos],
                     ['Llenados RFID', e => e.eventos_llenado],
                     ['Giros/molde·día', e => `<strong>${fmtNum(e.giros, 2)}</strong>`],
                     ['Moldes ociosos', e => e.moldes_ociosos]
@@ -2928,14 +3066,14 @@
             },
             {
                 id: 'plan', n: 4, icono: '📋', titulo: 'Cumplimiento del Plan', tipo: 'pct', metaSugerida: 0.9, serie: 'cumplimiento',
-                descripcion: 'Cuánto de lo que el equipo se comprometió a fabricar efectivamente lo fabricó. Es el compromiso del equipo, no una orden.',
-                formula: 'Moldes llenados / moldes programados (filas del histórico), solo en días con producción.',
-                fuente: 'historico_eficiencia_moldes',
+                descripcion: 'De los moldes que el equipo tenía planificados (Estado SI), cuántos llenó cada día. Es el compromiso del equipo, no una orden.',
+                formula: 'Moldes planificados con al menos un llenado / moldes planificados (Estado SI), solo en días con producción.',
+                fuente: 'planificacion_moldes (Estado SI) · lecturas_rfid zona Llenado',
                 valor: (e) => e?.cumplimiento,
-                sub: (e) => e ? `${e.llenados} de ${e.programados} moldes programados llenados` : '',
+                sub: (e) => e ? `${e.llenados} de ${e.programados} molde-días planificados con llenado` : '',
                 estado: (e) => !e || !e.programados ? 'sin' : 'ok',
                 columnas: [
-                    ['Programados', e => e.programados],
+                    ['Planificados', e => e.programados],
                     ['Llenados', e => e.llenados],
                     ['Cumplimiento', e => `<strong>${fmtPct(e.cumplimiento)}</strong>`]
                 ]
@@ -2949,8 +3087,8 @@
             },
             {
                 id: 'margen', n: 6, icono: '🎯', titulo: 'Margen por Molde-Día', tipo: 'moneda', metaSugerida: null,
-                descripcion: 'Cuánta plata deja cada molde activo por día. Es la métrica central: si el molde es el cuello de botella, importa el margen por molde, no por pieza.',
-                formula: 'Σ (precio_venta − costo_estandar) de las piezas llenadas / molde-días activos disponibles.',
+                descripcion: 'Cuánta plata deja cada molde planificado por día. Es la métrica central: si el molde es el cuello de botella, importa el margen por molde, no por pieza.',
+                formula: 'Σ (precio_venta − costo_estandar) de las piezas llenadas / molde-días planificados.',
                 fuente: 'historico_eficiencia_moldes · planificacion_moldes (precio_venta, costo_estandar)',
                 valor: (e) => e && e.llenados_con_margen > 0 ? e.margen_molde_dia : null,
                 sub: (e) => e ? `Margen total ${fmtMoneda(e.margen)} · ${e.llenados_con_margen}/${e.llenados} piezas con precio y costo` : '',
@@ -2965,9 +3103,9 @@
             },
             {
                 id: 'productividad', n: 7, icono: '💪', titulo: 'Eficiencia de Mano de Obra Directa', tipo: 'pct', metaSugerida: 0.85, serie: 'eficiencia_mod', personas: true,
-                descripcion: 'De todos los minutos que los armadores/desarmadores presentes tenían disponibles, cuántos se convirtieron en moldes llenados, medidos con el tiempo estándar (ciclo_min) de cada molde.',
-                formula: 'Minutos ganados / minutos disponibles. Minutos ganados = Σ ciclo_min de los moldes llenados. Minutos disponibles = armadores presentes × jornada (475 min de lunes a jueves, 415 el viernes).',
-                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · historico_eficiencia_moldes · planificacion_moldes.ciclo_min',
+                descripcion: 'De todos los minutos-persona que los armadores/desarmadores presentes tenían disponibles, cuántos se convirtieron en moldes llenados, medidos con el tiempo estándar de una persona (ciclo_min).',
+                formula: 'Minutos ganados / minutos disponibles. Minutos ganados = Σ ciclo_min × llenados de cada molde planificado (ciclo_min = minutos de 1 persona, así que ya está en minutos-persona). Minutos disponibles = armadores presentes × jornada (475 min de lunes a jueves, 415 el viernes).',
+                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · planificacion_moldes (ciclo_min, Estado SI)',
                 valor: (e) => e?.eficiencia_mod,
                 sub: (e) => e ? `${fmtNum(e.min_ganados, 0)} min ganados de ${fmtNum(e.min_disponibles, 0)} disp. · ${fmtNum(e.piezas_por_armador, 1)} moldes/armador-día` : '',
                 estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_ganados) ? 'ok' : 'dato'),
@@ -2984,12 +3122,12 @@
                 id: 'capacidad', n: 11, icono: '📐', titulo: 'Carga vs. Capacidad', tipo: 'pct', metaSugerida: 0.95, serie: 'carga', personas: true,
                 banda: [CARGA_MIN_SANA, CARGA_MAX_SANA],
                 descripcion: 'Si lo que se planificó para cada equipo entra en los minutos que realmente tuvo, según quién vino a trabajar. Por encima de 105% el equipo está sobrecargado; por debajo de 85% hay capacidad sin planificar.',
-                formula: 'Minutos planificados / minutos disponibles. Planificados = Σ ciclo_min de los moldes programados. Disponibles = armadores presentes × jornada. Capacidad perdida por ausencias = (esperados − presentes) × jornada.',
-                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · feriados · historico_eficiencia_moldes · planificacion_moldes.ciclo_min',
+                formula: 'Minutos-persona planificados / minutos-persona disponibles. Planificados = Σ ciclo_min (1 persona) de los moldes con Estado SI. Disponibles = armadores presentes × jornada. Dividir ambos por los armadores da lo mismo: es la misma proporción en horas de equipo. Capacidad perdida por ausencias = (esperados − presentes) × jornada.',
+                fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · feriados · planificacion_moldes (ciclo_min, Estado SI)',
                 valor: (e) => e?.carga,
                 sub: (e) => e ? `${fmtNum(e.min_planificados, 0)} min plan. / ${fmtNum(e.min_disponibles, 0)} disp. · Asistencia ${fmtPct(e.asistencia_directa)} · Perdidos ${fmtNum(e.capacidad_perdida, 0)} min` : '',
                 estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_planificados) ? 'ok' : 'dato'),
-                requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, los moldes programados no suman minutos planificados.',
+                requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, los moldes planificados no suman minutos.',
                 columnas: [
                     ['Asistencia', e => `${e.dir_presentes ?? 0}/${e.dir_esperados ?? 0} (${fmtPct(e.asistencia_directa)})`],
                     ['Min disponibles', e => fmtNum(e.min_disponibles, 0)],
@@ -3116,13 +3254,14 @@
                 `Período: ${fechaAR(fechaLocalISO(desde))} → ${fechaAR(fechaLocalISO(hasta))}. Se compara contra ${fechaAR(fechaLocalISO(desdeAnt))} → ${fechaAR(fechaLocalISO(hastaAnt))}. Hacé clic en cualquier KPI para profundizar.`;
 
             try {
-                const [resAct, resAnt, metas, cal, mant, dem] = await Promise.all([
+                const [resAct, resAnt, metas, cal, mant, dem, mol] = await Promise.all([
                     fetchRpc('fn_kpis_teal', { p_desde: fechaLocalISO(desde), p_hasta: fechaLocalISO(hasta) }),
                     fetchRpc('fn_kpis_teal', { p_desde: fechaLocalISO(desdeAnt), p_hasta: fechaLocalISO(hastaAnt) }),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/kpi_metas?select=*`, { headers: SB_HEADERS }), 'kpi_metas'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/vista_gestion_calidad_app?select=*`, { headers: SB_HEADERS }), 'vista_gestion_calidad_app'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/registro_mejoras?select=*`, { headers: SB_HEADERS }), 'registro_mejoras'),
-                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes')
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes'),
+                    jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*`, { headers: SB_HEADERS }), 'planificacion_moldes')
                 ]);
 
                 if (!resAct.ok) throw new Error(`fn_kpis_teal → Status ${resAct.status}: ${await resAct.text()}`);
@@ -3133,6 +3272,7 @@
                 cacheCalidad = cal;
                 cacheMantenimiento = mant;
                 cacheDemandaOdoo = dem;
+                if (mol.length) cacheMoldesPlanificacion = mol;
 
                 renderizarKpisTeal();
                 renderizarPulsoVivo();
@@ -3281,6 +3421,12 @@
             return '<span class="badge">SIN ACTIVIDAD</span>';
         }
 
+        function planHtml(p) {
+            return p.planificado === false
+                ? '<span class="badge badge-warning">Fuera de plan</span>'
+                : '<span class="badge badge-success">SI</span>';
+        }
+
         function etiquetaClase(clase) {
             return {
                 DIRECTO_MOLDES: '🔧 Armador',
@@ -3367,7 +3513,9 @@
                 if (caja) caja.scrollTop = 0;
             } catch (err) {
                 console.error('Error en el detalle del KPI:', err);
-                body.innerHTML = migasHtml() + `<p style="color: var(--danger);">❌ No se pudo cargar el detalle: ${err.message}</p>`;
+                const sinFuncion = /PGRST202/.test(err.message);
+                body.innerHTML = migasHtml() + `<p style="color: var(--danger);">❌ No se pudo cargar el detalle: ${err.message}</p>` +
+                    (sinFuncion ? '<div class="aviso-secuencia">Falta una función en Supabase: ejecutá completo el archivo celotti_correcciones.sql en el SQL Editor y recargá la app.</div>' : '');
             }
         }
 
@@ -3389,7 +3537,7 @@
                 ['Ciclos', r => r.ciclos]
             ],
             giros: [
-                ['Moldes activos', r => r.molde_dias_disp],
+                ['Moldes planif.', r => r.molde_dias_disp],
                 ['Llenados', r => r.eventos_llenado],
                 ['Giros', r => `<strong>${fmtNum(ratio(r.eventos_llenado, r.molde_dias_disp), 2)}</strong>`]
             ],
@@ -3399,7 +3547,7 @@
                 ['FPY', r => `<strong>${fmtPct(ratio(r.sin_defecto, r.inspeccionadas))}</strong>`]
             ],
             plan: [
-                ['Programados', r => r.programados],
+                ['Planificados (SI)', r => r.programados],
                 ['Llenados', r => r.llenados],
                 ['Cumplimiento', r => `<strong>${fmtPct(ratio(r.llenados, r.programados))}</strong>`]
             ],
@@ -3427,7 +3575,7 @@
         // Columnas, filtro y orden del nivel "molde por molde" según el KPI (de peor a mejor)
         const COLS_MOLDE = {
             oee: [
-                ['Días activo', m => m.dias_activo],
+                ['Días planif.', m => m.dias_activo],
                 ['Ciclos', m => m.ciclos],
                 ['Rendim. (sin tope)', m => fmtPct(ratio(m.sum_obj, m.sum_real))],
                 ['Inspec.', m => m.inspeccionadas],
@@ -3435,7 +3583,7 @@
                 ['Llenados', m => m.eventos_llenado]
             ],
             giros: [
-                ['Días activo', m => m.dias_activo],
+                ['Días planif.', m => m.dias_activo],
                 ['Llenados', m => m.eventos_llenado],
                 ['Días con llenado', m => m.dias_con_llenado],
                 ['Giros', m => `<strong>${fmtNum(ratio(m.eventos_llenado, m.dias_activo), 2)}</strong>`]
@@ -3446,8 +3594,8 @@
                 ['FPY', m => `<strong>${fmtPct(ratio(m.sin_defecto, m.inspeccionadas))}</strong>`]
             ],
             plan: [
-                ['Programados', m => m.programados],
-                ['Llenados', m => m.llenados],
+                ['Días planif.', m => m.programados],
+                ['Días con llenado', m => m.llenados],
                 ['Cumplimiento', m => `<strong>${fmtPct(ratio(m.llenados, m.programados))}</strong>`]
             ]
         };
@@ -3546,14 +3694,14 @@
                     // Moldes ociosos → clic a la ficha del molde
                     if (def.id === 'giros') {
                         const ociosos = (act.moldes_ociosos || []).filter(m => equipo === 'PLANTA' || m.equipo === equipo);
-                        html += bloque(`😴 Moldes activos sin llenados en el período (${ociosos.length})`,
+                        html += bloque(`😴 Moldes planificados sin llenados en el período (${ociosos.length})`,
                             ociosos.length === 0
-                                ? '<p style="margin: 0; color: var(--accent-teal);">Todos los moldes activos tuvieron al menos un llenado. 👏</p>'
+                                ? '<p style="margin: 0; color: var(--accent-teal);">Todos los moldes planificados tuvieron al menos un llenado. 👏</p>'
                                 : tablaDrill(
                                     [['Molde', m => `<strong>${nombreMolde(m)}</strong>`], ['Equipo', m => m.equipo], ['Tag', m => `<code>${m.id_tag}</code>`]],
                                     ociosos,
                                     m => llamada('irDrill', 'molde', 'giros', m.id_tag, m.equipo)
-                                  ) + '<p class="drill-hint">¿Siguen siendo necesarios? Desactivarlos (Estado = NO) libera capital y espacio.</p>'
+                                  ) + '<p class="drill-hint">¿Siguen siendo necesarios? Pasarlos a Estado NO libera capital y espacio.</p>'
                         );
                     }
 
@@ -3673,7 +3821,7 @@
                         diasRel,
                         r => llamada('irDrill', 'dia', id, eq, r.fecha),
                         'No hay días con datos en el período.'
-                    ) + `<p class="drill-hint">👆 Clic en un día para ver ${esPersonas ? 'quién vino, quién faltó y' : ''} molde por molde qué pasó.</p>`
+                    ) + `<p class="drill-hint">👆 Clic en un día para ver ${esPersonas ? 'quién vino, quién faltó y ' : ''}molde por molde qué pasó.</p>`
                 );
 
                 if (!esPersonas) {
@@ -3736,31 +3884,35 @@
                     verCapacidad ? rpcJson('fn_kpi_personas', { p_desde: fecha, p_hasta: fecha, p_equipo: eq }) : Promise.resolve([])
                 ]);
 
-                const llenados = prod.filter(p => p.llenado).length;
-                const enProceso = prod.filter(p => !p.llenado && p.con_actividad).length;
-                const sinActividad = prod.filter(p => !p.con_actividad).length;
-                const pct = prod.length ? llenados / prod.length : null;
+                const planif = prod.filter(p => p.planificado !== false);
+                const fueraPlan = prod.length - planif.length;
+                const llenados = planif.filter(p => p.llenado).length;
+                const enProceso = planif.filter(p => !p.llenado && p.con_actividad).length;
+                const sinActividad = planif.filter(p => !p.con_actividad).length;
+                const pct = planif.length ? llenados / planif.length : null;
                 const piezasOk = piezas.filter(p => parseInt(p.total_defectos) === 0).length;
 
                 let html = statsHtml([
-                    ['Programados', prod.length, 'var(--blue-info)'],
+                    ['Planificados (SI)', planif.length, 'var(--blue-info)'],
                     ['Llenados', llenados, 'var(--accent-teal)'],
                     ['Cumplimiento', fmtPct(pct), colorCumplimiento(pct === null ? null : pct * 100)],
                     ['En proceso', enProceso, 'var(--warning)'],
                     ['Sin actividad', sinActividad, 'var(--text-muted)'],
+                    ...(fueraPlan ? [['Trabajados fuera de plan', fueraPlan, 'var(--warning)']] : []),
                     ...(verPiezas ? [['FPY del día', fmtPct(ratio(piezasOk, piezas.length)), 'var(--accent-teal)']] : [])
                 ]);
 
                 if (verCapacidad) html += bloqueCapacidadDia(capacidad, eq);
 
-                const ordenEstado = p => p.llenado ? 2 : (p.con_actividad ? 1 : 0);
+                const ordenEstado = p => (p.planificado === false ? 3 : 0) + (p.llenado ? 2 : (p.con_actividad ? 1 : 0));
                 const prodOrdenada = [...prod].sort((a, b) => ordenEstado(a) - ordenEstado(b));
 
-                const bloqueProd = bloque(`🧱 Molde por molde (${prod.length}) · primero lo que no se completó`,
+                const bloqueProd = bloque(`🧱 Molde por molde (${prod.length}) · primero lo planificado que no se completó`,
                     tablaDrill(
                         [
                             ['Molde', p => `<strong>#${p.n_molde ?? '--'}</strong> ${p.producto || ''}`],
                             ...(eq === 'PLANTA' ? [['Equipo', p => p.equipo]] : []),
+                            ['Plan', p => planHtml(p)],
                             ['🔓 Des', p => horaCorta(p.hora_desarmado)],
                             ['🔒 Arm', p => horaCorta(p.hora_armado)],
                             ['🧱 Lle', p => horaCorta(p.hora_llenado)],
@@ -3768,7 +3920,7 @@
                         ],
                         prodOrdenada,
                         p => p.id_tag ? llamada('irDrill', 'molde', id, p.id_tag, eq) : null,
-                        'No hay moldes programados ese día.'
+                        'No hay moldes planificados ese día.'
                     ) + '<p class="drill-hint">👆 Clic en un molde para abrir su ficha. Sin flecha: el molde no pudo identificarse en planificacion_moldes.</p>'
                 );
 
@@ -3833,30 +3985,33 @@
                 const realProm = reales.length ? reales.reduce((a, b) => a + b, 0) / reales.length : null;
                 const ordenados = [...reales].sort((a, b) => a - b);
                 const mediana = ordenados.length ? ordenados[Math.floor(ordenados.length / 2)] : null;
-                const objetivo = num(plan?.ciclo_min) ?? num(ciclos[0]?.tiempo_objetivo_min);
+                const objs = ciclos.map(c => num(c.tiempo_objetivo_min)).filter(v => v !== null);
+                const objEquipo = objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null;
                 const piezasOk = piezas.filter(p => parseInt(p.total_defectos) === 0).length;
                 const totalLlen = llenDias.reduce((a, d) => a + (parseInt(d.eventos_llenado) || 0), 0);
-                const prodLlen = prod.filter(p => p.llenado).length;
+                const prodPlan = prod.filter(p => p.planificado !== false);
+                const prodLlen = prodPlan.filter(p => p.llenado).length;
 
-                let html = `<p style="margin-top: 0; color: var(--text-muted);"><small>🏷️ Tag <code>${tag}</code> · ${plan ? `Familia ${plan.Familia || '--'} · Equipo ${plan.Equipo || '--'} · Estado ${plan.Estado || '--'}` : 'Sin datos en planificacion_moldes'}</small></p>`;
+                let html = `<p style="margin-top: 0; color: var(--text-muted);"><small>🏷️ Tag <code>${tag}</code> · ${plan ? `Familia ${plan.Familia || '--'} · Equipo ${plan.Equipo || '--'} · Estado ${estadoSI(plan.Estado) ? 'SI' : 'NO'}` : 'Sin datos en planificacion_moldes'}</small></p>`;
                 html += statsHtml([
                     ['Ciclos medidos', ciclos.length],
                     ['Real promedio', fmtMin(realProm), 'var(--warning)'],
                     ['Real mediana', fmtMin(mediana)],
-                    ['Objetivo (ciclo_min)', fmtMin(objetivo), 'var(--blue-info)'],
+                    ['Ciclo 1 persona', fmtMin(plan?.ciclo_min)],
+                    ['Obj. equipo (prom.)', fmtMin(objEquipo), 'var(--blue-info)'],
                     ['FPY', fmtPct(ratio(piezasOk, piezas.length)), 'var(--accent-teal)'],
                     ['Llenados RFID', totalLlen],
-                    ['Plan cumplido', `${prodLlen}/${prod.length}`]
+                    ['Días planif. con llenado', `${prodLlen}/${prodPlan.length}`]
                 ]);
 
                 const secciones = {
-                    ciclos: bloque(`⏱️ Ciclos Desarmado ➔ Armado (${ciclos.length})`, tablaDrill(
+                    ciclos: bloque(`⏱️ Ciclos Desarmado ➔ Armado (${ciclos.length}) · objetivo = ciclo_min ÷ armadores del día`, tablaDrill(
                         [
                             ['Fecha', c => `${diaSemana(c.fecha)} ${fechaAR(c.fecha)}`],
                             ['🔓 Des', c => horaCorta(c.hora_desarmado)],
                             ['🔒 Arm', c => horaCorta(c.hora_armado)],
                             ['Real', c => `<strong>${fmtMin(c.tiempo_ciclo_min)}</strong>`],
-                            ['Objetivo', c => fmtMin(c.tiempo_objetivo_min)],
+                            ['Obj. equipo', c => fmtMin(c.tiempo_objetivo_min)],
                             ['Desvío', c => {
                                 const d = num(c.desvio_min);
                                 return `<span style="color: ${d === null ? 'var(--text-muted)' : (d > 0 ? 'var(--warning)' : 'var(--accent-teal)')};">${fmtDesvio(c.desvio_min)}</span>`;
@@ -3878,18 +4033,18 @@
                             ['Fecha', d => `${diaSemana(d.fecha)} ${fechaAR(d.fecha)}`],
                             ['Llenados', d => parseInt(d.eventos_llenado) > 0 ? `<strong>${d.eventos_llenado}</strong>` : '<span style="color: var(--danger);">0</span>']
                         ],
-                        llenDias, null, 'Sin registros diarios (el molde no estuvo activo o no se recalcularon esos días).'
+                        llenDias, null, 'Sin registros diarios (el molde no estaba con Estado SI o no se recalcularon esos días).'
                     )),
-                    prod: bloque(`📋 Producción planificada (${prod.length})`, tablaDrill(
+                    prod: bloque(`📋 Producción día por día (${prod.length})`, tablaDrill(
                         [
                             ['Fecha', p => `${diaSemana(p.fecha)} ${fechaAR(p.fecha)}`],
-                            ['Producto', p => p.producto || '--'],
+                            ['Plan', p => planHtml(p)],
                             ['🔓 Des', p => horaCorta(p.hora_desarmado)],
                             ['🔒 Arm', p => horaCorta(p.hora_armado)],
                             ['🧱 Lle', p => horaCorta(p.hora_llenado)],
                             ['Estado', p => estadoProduccionHtml(p)]
                         ],
-                        prod, null, 'No hay filas en el histórico para este molde.'
+                        prod, null, 'No hay registros de producción para este molde.'
                     ))
                 };
 
@@ -4067,7 +4222,7 @@
                 };
             },
 
-                    // NIVEL 3 / 4: una persona → su fichada día por día
+            // NIVEL 3 / 4: una persona → su fichada día por día
             async persona(token, nombre) {
                 const { desde, hasta } = periodoKpi();
                 const fichadas = await rpcJson('fn_kpi_fichadas', { p_desde: desde, p_hasta: hasta, p_token: token });
