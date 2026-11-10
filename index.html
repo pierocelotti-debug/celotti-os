@@ -608,6 +608,82 @@
             color: var(--text-muted);
             margin: 8px 0 0;
         }
+
+        /* COMPRAS Y VENTAS */
+        .fin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .fin-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .fin-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-teal);
+        }
+        .fin-card .valor {
+            font-size: 1.45rem;
+            font-weight: 800;
+            margin-top: 4px;
+        }
+        .fin-seccion {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .fin-seccion h3 {
+            margin: 0 0 4px;
+            color: var(--accent-teal);
+            font-size: 1rem;
+        }
+        .grafico-meses {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .grafico-meses svg text {
+            fill: var(--text-muted);
+            font-size: 10px;
+        }
+        .leyenda {
+            display: flex;
+            gap: 14px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+        .leyenda span::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 5px;
+            vertical-align: middle;
+            background: var(--c);
+        }
+        .estado-vacio {
+            border: 1px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            color: var(--text-muted);
+            font-size: 0.88rem;
+        }
+        .estado-vacio code {
+            color: var(--accent-teal);
+        }
+        .fila-revisar td {
+            background: rgba(245, 158, 11, 0.08);
+        }
     </style>
 </head>
 <body>
@@ -632,6 +708,8 @@
         <div class="nav-item" id="nav-mantenimiento" onclick="switchTab('mantenimiento')">⚙️ Mantenimiento</div>
         <div class="nav-item" id="nav-logistica" onclick="switchTab('logistica')">🚛 Logística & Despacho</div>
         <div class="nav-item" id="nav-bienestar" onclick="switchTab('bienestar')">🌱 Bienestar Org.</div>
+        <div class="nav-item" id="nav-compras" onclick="switchTab('compras')">🛒 Compras</div>
+        <div class="nav-item" id="nav-ventas" onclick="switchTab('ventas')">💵 Ventas</div>
         <div class="nav-item" id="nav-indicadores" onclick="switchTab('indicadores')">📊 Indicadores Teal</div>
     </div>
 
@@ -841,7 +919,90 @@
             <div id="bienestar-list" class="grid-cards">Cargando ranking de operarios...</div>
         </div>
 
-        <!-- 7. SOLAPA INDICADORES TEAL -->
+        <!-- 7. SOLAPA COMPRAS: EGRESOS, PRESUPUESTO, CT Y MATERIA PRIMA -->
+        <div id="sec-compras" style="display: none;">
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Año:</label>
+                    <select id="filtro-fin-anio" onchange="cargarComprasData()"></select>
+                </div>
+                <div class="filter-group">
+                    <label>Acumulado hasta:</label>
+                    <select id="filtro-fin-hasta" onchange="renderizarCompras()"></select>
+                </div>
+                <div class="filter-group">
+                    <label>Clasificación:</label>
+                    <select id="filtro-fin-clase" onchange="renderizarCompras()">
+                        <option value="TODAS">Todas</option>
+                        <option value="SUELDOS">Sueldos</option>
+                        <option value="INDIRECTOS">Indirectos de fábrica</option>
+                        <option value="COMERCIAL">Comercial</option>
+                        <option value="ADMINISTRACION">Administración</option>
+                    </select>
+                </div>
+                <div class="filter-group" style="align-self: center; font-size: 0.85rem; color: var(--text-muted);">
+                    ℹ️ <em id="fin-info-origen">Hacé clic en cualquier número para llegar al registro de origen.</em>
+                </div>
+            </div>
+
+            <div id="compras-tarjetas" class="fin-grid">Cargando egresos y presupuesto...</div>
+
+            <div class="fin-seccion">
+                <h3>📅 Presupuesto vs. real, mes a mes</h3>
+                <p class="drill-hint" style="margin-top: 0;">👆 Clic en un mes para ver cada categoría y sus registros.</p>
+                <div id="compras-grafico" class="grafico-meses"></div>
+                <div id="compras-meses"></div>
+            </div>
+
+            <div class="fin-seccion">
+                <h3>🗂️ Por categoría (acumulado)</h3>
+                <p class="drill-hint" style="margin-top: 0;">👆 Clic en una categoría para ver su evolución mes a mes. Las filas resaltadas se desvían más del 50%: conviene revisarlas.</p>
+                <div id="compras-categorias"></div>
+            </div>
+
+            <div class="fin-seccion">
+                <h3>🧱 Materia prima (cemento, áridos, hierro, aditivos)</h3>
+                <div id="compras-mp"></div>
+            </div>
+        </div>
+
+        <!-- 8. SOLAPA VENTAS -->
+        <div id="sec-ventas" style="display: none;">
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Año:</label>
+                    <select id="filtro-ven-anio" onchange="cargarVentasData()"></select>
+                </div>
+                <div class="filter-group" style="align-self: center; font-size: 0.85rem; color: var(--text-muted);">
+                    ℹ️ <em>Ventas facturadas (fin_ventas) y cartera pendiente de producir y entregar (Odoo).</em>
+                </div>
+            </div>
+
+            <div id="ventas-tarjetas" class="fin-grid">Cargando ventas...</div>
+
+            <div class="fin-seccion">
+                <h3>📅 Ventas mes a mes vs. costo y sueldos</h3>
+                <div id="ventas-meses"></div>
+            </div>
+
+            <div class="grid-cards" style="grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); margin-bottom: 20px;">
+                <div class="fin-seccion" style="margin-bottom: 0;">
+                    <h3>👥 Por cliente</h3>
+                    <div id="ventas-clientes"></div>
+                </div>
+                <div class="fin-seccion" style="margin-bottom: 0;">
+                    <h3>📦 Por producto</h3>
+                    <div id="ventas-productos"></div>
+                </div>
+            </div>
+
+            <div class="fin-seccion">
+                <h3>📋 Cartera pendiente (pedidos de Odoo sin entregar)</h3>
+                <div id="ventas-cartera"></div>
+            </div>
+        </div>
+
+        <!-- 9. SOLAPA INDICADORES TEAL -->
         <div id="sec-indicadores" style="display: none;">
             <div class="filter-bar">
                 <div class="filter-group">
@@ -905,9 +1066,12 @@
           /      |      \         |                |
      FPY (3)  Plan (4)  Velocidad (9)        OTIF Cliente (5)
                    \         |
-     Carga vs Capacidad (11)  ·  Eficiencia MOD (7)
+     Carga vs Capacidad (11)  ·  Eficiencia MOD (7)  ·  Pérdidas $ (13)
                          \     /
-                     Pulso Teal (10)</div>
+                     Pulso Teal (10)
+
+   En pesos: CT/min (12) → Costo por Molde (15) · Ejecución Presupuestaria (14)
+             Ventas por $ de Sueldo (16) · Cemento por $ de Sueldo (17)</div>
             </div>
         </div>
     </div>
@@ -1014,6 +1178,9 @@
         let cacheRankingBienestar = [];
         let cacheTiemposMoldes = [];
         let cacheCapacidad = [];
+
+        // Módulo financiero: CT, presupuesto vs real, productividad económica (ver celotti_financiero.sql)
+        let cacheFin = { anio: null, ct: null, ctAnt: null, mensual: [], prod: [], categorias: [], cargadoEn: null };
 
         // KPIs Teal: período actual, período anterior y metas propuestas por los equipos
         let cacheKpisTeal = { actual: null, anterior: null };
@@ -1322,7 +1489,7 @@
 
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
-            ['planificacion', 'calidad', 'procesos-tiempos', 'mantenimiento', 'logistica', 'bienestar', 'indicadores'].forEach(t => {
+            ['planificacion', 'calidad', 'procesos-tiempos', 'mantenimiento', 'logistica', 'bienestar', 'compras', 'ventas', 'indicadores'].forEach(t => {
                 const el = document.getElementById(`sec-${t}`);
                 if (el) el.style.display = 'none';
             });
@@ -1350,8 +1517,14 @@
             } else if(tab === 'bienestar') {
                 document.getElementById('tab-title').innerText = 'Bienestar Organizacional & Auditorías';
                 cargarBienestarData();
+            } else if(tab === 'compras') {
+                document.getElementById('tab-title').innerText = 'Compras: Egresos, Presupuesto y Costo de Transformación';
+                cargarComprasData();
+            } else if(tab === 'ventas') {
+                document.getElementById('tab-title').innerText = 'Ventas: Facturación, Productividad Económica y Cartera';
+                cargarVentasData();
             } else if(tab === 'indicadores') {
-                document.getElementById('tab-title').innerText = 'Indicadores Teal: Eficiencia, Calidad, Capacidad y Autogestión';
+                document.getElementById('tab-title').innerText = 'Indicadores Teal: Eficiencia, Calidad, Capacidad, Costos y Autogestión';
                 cargarIndicadoresData();
             }
         }
@@ -1409,18 +1582,20 @@
                     ? jsonSeguro(fetchRpc('fn_foto_planificacion', { p_fecha: modoFotoFecha }), 'fn_foto_planificacion')
                     : jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/reporte_eficiencia_moldes?select=*&order=n_molde.asc`, { headers: SB_HEADERS }), 'reporte_eficiencia_moldes');
 
-                const [moldesRaw, dem, mol, zonas, promedios, capacidad] = await Promise.all([
+                const [moldesRaw, dem, mol, zonas, promedios, capacidad, ctHoy] = await Promise.all([
                     fuenteMoldes,
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*&order=Familia.asc`, { headers: SB_HEADERS }), 'planificacion_moldes'),
                     jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/config_zonas_rfid?select=zona,etapa`, { headers: SB_HEADERS }), 'config_zonas_rfid'),
                     jsonSeguro(fetchRpc('fn_tiempos_moldes', { p_desde: fechaLocalISO(d30), p_hasta: fechaLocalISO(), p_tolerancia_pct: TOLERANCIA_DESVIO_PCT }), 'fn_tiempos_moldes'),
-                    jsonSeguro(fetchRpc('fn_capacidad_dia', { p_fecha: modoFotoFecha || fechaLocalISO() }), 'fn_capacidad_dia')
+                    jsonSeguro(fetchRpc('fn_capacidad_dia', { p_fecha: modoFotoFecha || fechaLocalISO() }), 'fn_capacidad_dia'),
+                    jsonSeguro(fetchRpc('fn_ct', { p_fecha: modoFotoFecha || fechaLocalISO() }), 'fn_ct')
                 ]);
 
                 cacheDemandaOdoo = dem;
                 cacheMoldesPlanificacion = mol;
                 cacheCapacidad = capacidad;   // antes de normalizar: el divisor de armadores sale de acá
+                if (ctHoy[0]) cacheFin.ct = ctHoy[0];
 
                 if (modoFotoFecha) {
                     cacheFotoDia = moldesRaw
@@ -1568,6 +1743,7 @@
                     <p><small>📋 <strong>Planificados:</strong> ${fmtNum(plan, 0)} min-persona · ${c.moldes_programados} moldes (Estado SI)</small></p>
                     <p><small>⌛ <strong>Tiempo de equipo:</strong> ${horasEquipo !== null ? fmtNum(horasEquipo / 60, 1) + ' h' : '--'} <span style="color: var(--text-muted);">(÷ ${div} armador${div === 1 ? '' : 'es'})</span></small></p>
                     <p><small>✅ <strong>Ganados:</strong> ${fmtNum(gan, 0)} min-persona · ${c.moldes_llenados} llenados</small></p>
+                    ${ctMin() !== null ? `<p><small>💲 <strong>Al CT de ${fmtMoneda(ctMin())}/min:</strong> plan ${fmtMoneda(pesos(plan))} · ganado ${fmtMoneda(pesos(gan))} · ausencias ${fmtMoneda(pesos(Math.max(0, (num(c.min_disponibles_teoricos) || 0) - (disp || 0))))}</small></p>` : ''}
                     <div class="cap-barra" title="Azul: planificado · Verde: ganado (sobre minutos disponibles)">
                         <div class="cap-plan" style="width: ${anchoPlan}%;"></div>
                         <div class="cap-gan" style="width: ${anchoGan}%;"></div>
@@ -3052,16 +3228,16 @@
             {
                 id: 'fpy', n: 3, icono: '💎', titulo: 'Calidad a la Primera (FPY)', tipo: 'pct', metaSugerida: 0.95, serie: 'fpy',
                 descripcion: 'Porcentaje de piezas que salen del desmolde sin ningún defecto, y cuánto dinero cuesta la no calidad.',
-                formula: 'FPY = piezas sin defecto / piezas inspeccionadas. Costo de No Calidad = Σ costo_estandar de las piezas con defecto.',
+                formula: 'FPY = piezas sin defecto / piezas inspeccionadas. Costo de No Calidad = Σ costo_estandar de las piezas con defecto; si no hay costo_estandar cargado, se estima como piezas con defecto × ciclo_min promedio del equipo × CT por minuto (la transformación invertida en esas piezas).',
                 fuente: 'registro_desmolde_calidad · planificacion_moldes.costo_estandar',
                 valor: (e) => e?.calidad,
-                sub: (e) => e ? `${e.inspeccionadas} inspeccionadas · No calidad: ${e.copq != null ? fmtMoneda(e.copq) : 'falta costo'}` : '',
+                sub: (e) => { if (!e) return ''; const c = costoNoCalidad(e); return `${e.inspeccionadas} inspeccionadas · No calidad: ${c.valor != null ? fmtMoneda(c.valor) + (c.estimado ? ' (estimado con CT)' : '') : 'falta costo'}`; },
                 estado: (e) => !e || !e.inspeccionadas ? 'sin' : (e.defectuosas_sin_costo > 0 ? 'parcial' : 'ok'),
                 columnas: [
                     ['Inspeccionadas', e => e.inspeccionadas],
                     ['Sin defecto', e => e.sin_defecto],
                     ['FPY', e => `<strong>${fmtPct(e.calidad)}</strong>`],
-                    ['Costo No Calidad', e => e.copq != null ? fmtMoneda(e.copq) : '--']
+                    ['Costo No Calidad', e => { const c = costoNoCalidad(e); return c.valor != null ? fmtMoneda(c.valor) + (c.estimado ? ' <small style="color: var(--text-muted);">est.</small>' : '') : '--'; }]
                 ]
             },
             {
@@ -3107,7 +3283,7 @@
                 formula: 'Minutos ganados / minutos disponibles. Minutos ganados = Σ ciclo_min × llenados de cada molde planificado (ciclo_min = minutos de 1 persona, así que ya está en minutos-persona). Minutos disponibles = armadores presentes × jornada (475 min de lunes a jueves, 415 el viernes).',
                 fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · planificacion_moldes (ciclo_min, Estado SI)',
                 valor: (e) => e?.eficiencia_mod,
-                sub: (e) => e ? `${fmtNum(e.min_ganados, 0)} min ganados de ${fmtNum(e.min_disponibles, 0)} disp. · ${fmtNum(e.piezas_por_armador, 1)} moldes/armador-día` : '',
+                sub: (e, d) => e ? `${fmtNum(e.min_ganados, 0)} min ganados de ${fmtNum(e.min_disponibles, 0)} disp. · ${fmtNum(e.piezas_por_armador, 1)} moldes/armador-día · ${fmtMoneda(perdidaEquipo(e, d))} sin convertir` : '',
                 estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_ganados) ? 'ok' : 'dato'),
                 requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, un molde llenado no suma minutos ganados. Verificá también que los armadores tengan tag.',
                 columnas: [
@@ -3125,7 +3301,7 @@
                 formula: 'Minutos-persona planificados / minutos-persona disponibles. Planificados = Σ ciclo_min (1 persona) de los moldes con Estado SI. Disponibles = armadores presentes × jornada. Dividir ambos por los armadores da lo mismo: es la misma proporción en horas de equipo. Capacidad perdida por ausencias = (esperados − presentes) × jornada.',
                 fuente: 'Personas (equipo + puesto) · lecturas_rfid PERSONAL · config_jornada · feriados · planificacion_moldes (ciclo_min, Estado SI)',
                 valor: (e) => e?.carga,
-                sub: (e) => e ? `${fmtNum(e.min_planificados, 0)} min plan. / ${fmtNum(e.min_disponibles, 0)} disp. · Asistencia ${fmtPct(e.asistencia_directa)} · Perdidos ${fmtNum(e.capacidad_perdida, 0)} min` : '',
+                sub: (e) => e ? `${fmtNum(e.min_planificados, 0)} min plan. / ${fmtNum(e.min_disponibles, 0)} disp. · Asistencia ${fmtPct(e.asistencia_directa)} · Ausencias ${fmtNum(e.capacidad_perdida, 0)} min (${fmtMoneda(pesos(e.capacidad_perdida))})` : '',
                 estado: (e) => !e || !num(e.min_disponibles) ? 'sin' : (num(e.min_planificados) ? 'ok' : 'dato'),
                 requiere: 'Cargá ciclo_min en todos los moldes de planificacion_moldes: sin tiempo estándar, los moldes planificados no suman minutos.',
                 columnas: [
@@ -3160,6 +3336,71 @@
                 valor: (e, d) => d?.pulso?.valor,
                 sub: (e, d) => d?.pulso ? `Part. ${fmtPct(d.pulso.participacion)} · Toma ${fmtPct(d.pulso.toma_rapida)} · Pres. ${fmtPct(d.pulso.presencia)} · Cuid. ${fmtPct(d.pulso.cuidado)}` : '',
                 estado: (e, d) => d?.pulso?.valor == null ? 'sin' : 'ok'
+            },
+            {
+                id: 'ct', n: 12, icono: '💲', titulo: 'Costo de Transformación', tipo: 'moneda', unidad: '/ min', global: true, fin: true, menorEsMejor: true, metaSugerida: null,
+                descripcion: 'Cuánto le cuesta a la empresa cada minuto de un operario directo, contando sueldos, indirectos de fábrica, comercial y administración. Es la vara para valorizar en pesos cualquier minuto ganado o perdido en planta.',
+                formula: 'Promedio mensual del real de los meses cerrados (últimos 12) ÷ horas fábrica del mes (Σ jornada de cada día hábil) ÷ operarios directos ÷ 60. Es el mismo cálculo de la hoja COSTO DE TRANSFORMACION.',
+                fuente: 'fn_ct · vista_fin_mensual (fin_gastos + fin_presupuesto) · config_jornada · feriados · fin_parametros',
+                valor: (e, d) => d?.fin?.ct?.ct_min,
+                sub: (e, d) => d?.fin?.ct ? `${fmtMillones(d.fin.ct.costo_base_mensual)} por mes ÷ ${fmtNum(d.fin.ct.horas_fabrica_mes, 1)} h ÷ ${d.fin.ct.operarios_directos} operarios · comparado con el mes anterior` : '',
+                estado: (e, d) => d?.fin?.ct?.ct_min == null ? 'sin' : 'ok'
+            },
+            {
+                id: 'perdidas', n: 13, icono: '🔥', titulo: 'Pérdidas por Ineficiencia', tipo: 'moneda', personas: true, fin: true, menorEsMejor: true, metaSugerida: null,
+                descripcion: 'Cuántos pesos de costo de transformación pagamos por minutos de armadores que no se convirtieron en moldes llenados al tiempo estándar. No mide culpas: muestra dónde está la plata que se escapa (esperas, faltantes, moldes complicados, ciclo_min mal calibrado).',
+                formula: '(Minutos disponibles − minutos estándar ganados) × CT por minuto. Disponibles = armadores presentes × jornada. Ganados = Σ ciclo_min × llenados de los moldes planificados.',
+                fuente: 'kpi_diario (min_disponibles, min_ganados) · fn_ct',
+                valor: (e, d) => perdidaEquipo(e, d),
+                sub: (e) => e ? `${fmtNum(Math.max(0, (num(e.min_disponibles) || 0) - (num(e.min_ganados) || 0)), 0)} min sin convertir de ${fmtNum(e.min_disponibles, 0)} disponibles` : '',
+                estado: (e, d) => !e || !num(e.min_disponibles) || d?.fin?.ct?.ct_min == null ? 'sin' : (num(e.min_ganados) ? 'ok' : 'dato'),
+                requiere: 'Cargá ciclo_min en los moldes planificados: sin tiempo estándar, todo el tiempo disponible figura como pérdida.',
+                columnas: [
+                    ['Min disponibles', e => fmtNum(e.min_disponibles, 0)],
+                    ['Min ganados', e => fmtNum(e.min_ganados, 0)],
+                    ['Min sin convertir', e => fmtNum(Math.max(0, (num(e.min_disponibles) || 0) - (num(e.min_ganados) || 0)), 0)],
+                    ['$ perdidos', e => `<strong style="color: var(--danger);">${fmtMoneda(perdidaEquipo(e, cacheKpisTeal.actual))}</strong>`],
+                    ['$ ausencias', e => fmtMoneda(pesos(e.capacidad_perdida))]
+                ]
+            },
+            {
+                id: 'presupuesto', n: 14, icono: '📊', titulo: 'Ejecución Presupuestaria', tipo: 'pct', global: true, fin: true, menorEsMejor: true, metaSugerida: 1,
+                descripcion: 'Cuánto gastamos frente a lo que presupuestamos en el año, sumando solo los meses que ya tienen real cargado. Por encima de 100% el gasto supera el plan; muy por debajo puede ser ahorro o un gasto todavía no registrado.',
+                formula: 'Σ real / Σ presupuesto de los meses con real cargado, todas las categorías, acumulado al último mes cerrado. Se compara con el acumulado al mes anterior.',
+                fuente: 'vista_fin_mensual (fin_presupuesto + fin_gastos)',
+                valor: (e, d) => d?.fin?.ejecucion,
+                sub: (e, d) => d?.fin?.acum ? `Real ${fmtMillones(d.fin.acum.real)} de ${fmtMillones(d.fin.acum.ppto)} · ${d.fin.acum.meses} meses · cierre proyectado ${fmtMillones(d.fin.acum.proyeccion)}` : '',
+                estado: (e, d) => d?.fin?.ejecucion == null ? 'sin' : 'ok'
+            },
+            {
+                id: 'costo_molde', n: 15, icono: '🧱', titulo: 'Costo por Molde Producido', tipo: 'moneda', global: true, fin: true, menorEsMejor: true, metaSugerida: null,
+                descripcion: 'Cuánto costo de estructura (sueldos + indirectos + comercial + administración) carga cada molde llenado. Baja cuando producimos más con la misma estructura: es la productividad en pesos.',
+                formula: 'Costo total real del último mes cerrado ÷ moldes llenados ese mes (antena de llenado). En el detalle: sueldo por molde y absorción (minutos estándar ganados × CT ÷ costo).',
+                fuente: 'fn_fin_productividad (vista_fin_mensual + kpi_molde_diario + kpi_diario)',
+                valor: (e, d) => d?.fin?.costo_molde,
+                sub: (e, d) => d?.fin?.prod ? `${MESES_LARGO[(d.fin.mes || 1) - 1]}: ${fmtMillones(d.fin.prod.costo_total)} ÷ ${d.fin.prod.moldes_llenados || 0} moldes · sueldo/molde ${fmtMoneda(d.fin.sueldo_molde)}` : '',
+                estado: (e, d) => d?.fin?.costo_molde == null ? (d?.fin?.prod?.costo_total ? 'dato' : 'sin') : 'ok',
+                requiere: 'Recalculá kpi_molde_diario para todo el año (fn_refrescar_kpis) para tener los moldes llenados de cada mes.'
+            },
+            {
+                id: 'ventas_sueldo', n: 16, icono: '💵', titulo: 'Ventas por Peso de Sueldo', tipo: 'dec2', unidad: 'x', global: true, fin: true, metaSugerida: null,
+                descripcion: 'Cuántos pesos vendemos por cada peso de sueldo pagado. Une a la planta con el cliente: si crece, el trabajo de todos se está convirtiendo en ventas.',
+                formula: 'Ventas netas facturadas del último mes cerrado ÷ sueldos reales del mismo mes. En el detalle también: ventas ÷ costo total.',
+                fuente: 'fin_ventas · vista_fin_mensual',
+                valor: (e, d) => d?.fin?.ventas_sueldo,
+                sub: (e, d) => d?.fin?.prod ? `Ventas ${fmtMillones(d.fin.prod.ventas)} · sueldos ${fmtMillones(d.fin.prod.sueldos)}` : '',
+                estado: (e, d) => d?.fin?.ventas_sueldo == null ? 'dato' : 'ok',
+                requiere: 'Cargar las ventas en fin_ventas: el conector de n8n con Odoo (facturas de cliente) las completa.'
+            },
+            {
+                id: 'cemento', n: 17, icono: '🏗️', titulo: 'Cemento por Peso de Sueldo', tipo: 'dec2', unidad: 'x', global: true, fin: true, metaSugerida: null,
+                descripcion: 'Cuántos pesos de cemento compramos por cada peso de sueldo. El cemento sigue al volumen producido: si los sueldos crecen y el cemento no, producimos menos por persona. En el detalle se compara el cemento comprado con el teórico consumido.',
+                formula: 'Cemento comprado en $ del último mes cerrado ÷ sueldos del mes. Cemento teórico = m3_hormigon del molde × llenados × dosificación (fin_parametros.kg_cemento_por_m3).',
+                fuente: 'fin_compras_mp (familia CEMENTO) · vista_fin_mensual · kpi_molde_diario · planificacion_moldes.m3_hormigon',
+                valor: (e, d) => d?.fin?.cemento_sueldo,
+                sub: (e, d) => d?.fin?.prod?.cemento_kg ? `${fmtNum(d.fin.prod.cemento_kg / 1000, 1)} tn comprado · teórico ${d.fin.prod.cemento_teorico_kg ? fmtNum(d.fin.prod.cemento_teorico_kg / 1000, 1) + ' tn' : 'falta m3'}` : '',
+                estado: (e, d) => d?.fin?.cemento_sueldo == null ? 'dato' : 'ok',
+                requiere: 'Cargar las compras de materia prima en fin_compras_mp (familia CEMENTO, con kg). El conector de n8n con Odoo las completa.'
             }
         ];
 
@@ -3208,7 +3449,7 @@
             const diff = actual - anterior;
             if (Math.abs(diff) < 1e-9) return '<span style="color: var(--text-muted);">= igual que el período anterior</span>';
 
-            let mejora = diff > 0;
+            let mejora = def.menorEsMejor ? diff < 0 : diff > 0;
             if (def.banda) {
                 const centro = (def.banda[0] + def.banda[1]) / 2;
                 mejora = Math.abs(actual - centro) < Math.abs(anterior - centro);
@@ -3268,6 +3509,12 @@
 
                 cacheKpisTeal.actual = await resAct.json();
                 cacheKpisTeal.anterior = resAnt.ok ? await resAnt.json() : null;
+
+                // Indicadores económicos: último mes cerrado vs. el mes anterior
+                await cargarFin(new Date().getFullYear()).catch(e => console.warn('Módulo financiero no disponible:', e));
+                const umc = ultimoMesCerrado();
+                cacheKpisTeal.actual.fin = indicadoresFin(umc, cacheFin.ct);
+                if (cacheKpisTeal.anterior) cacheKpisTeal.anterior.fin = indicadoresFin(umc ? umc - 1 : null, cacheFin.ctAnt);
                 cacheKpiMetas = metas;
                 cacheCalidad = cal;
                 cacheMantenimiento = mant;
@@ -3326,7 +3573,7 @@
                 barra = `<div class="meta-barra"><div style="width: ${ancho}%; background: ${colorValor};"></div></div>`;
                 lineaMeta = `<div class="kpi-sub">🎯 Banda sana ${fmtPct(def.banda[0])} – ${fmtPct(def.banda[1])}${meta && !meta.sugerida ? ` · meta propuesta ${formatearKpi(def, meta.valor)}` : ''}</div>`;
             } else if (meta && meta.valor) {
-                const avance = actual !== null ? actual / meta.valor : null;
+                const avance = actual === null ? null : (def.menorEsMejor ? (actual ? meta.valor / actual : 1) : actual / meta.valor);
                 colorValor = avance === null ? 'var(--text-muted)' : (avance >= 1 ? 'var(--accent-teal)' : (avance >= 0.85 ? 'var(--warning)' : 'var(--danger)'));
                 const ancho = avance === null ? 0 : Math.max(0, Math.min(100, avance * 100));
                 barra = `<div class="meta-barra"><div style="width: ${ancho}%; background: ${colorValor};"></div></div>`;
@@ -3563,6 +3810,13 @@
                 ['Eficiencia', r => `<strong>${fmtPct(ratio(r.min_ganados, r.min_disponibles))}</strong>`],
                 ['Moldes/armador', r => fmtNum(ratio(r.llenados, r.dir_presentes), 1)]
             ],
+            perdidas: [
+                ['Armadores', r => `${r.dir_presentes ?? 0} / ${r.dir_esperados ?? 0}`],
+                ['Min disp.', r => fmtNum(r.min_disponibles, 0)],
+                ['Min ganados', r => fmtNum(r.min_ganados, 0)],
+                ['Min sin convertir', r => fmtNum(Math.max(0, (num(r.min_disponibles) || 0) - (num(r.min_ganados) || 0)), 0)],
+                ['$ perdidos', r => `<strong style="color: var(--danger);">${fmtMoneda(pesos(Math.max(0, (num(r.min_disponibles) || 0) - (num(r.min_ganados) || 0))))}</strong>`]
+            ],
             capacidad: [
                 ['Asistencia', r => `${r.dir_presentes ?? 0} / ${r.dir_esperados ?? 0} (${fmtPct(ratio(r.dir_presentes, r.dir_esperados, true))})`],
                 ['Min disp.', r => fmtNum(r.min_disponibles, 0)],
@@ -3730,6 +3984,9 @@
                             x => llamada('irDrill', 'casos', x.k)
                         ));
                     }
+
+                    // KPIs financieros: la cuenta con números, meses base y acceso a registros
+                    if (def.fin) html += bloquesKpiFin(def);
 
                     // Pulso: componentes → personas o casos
                     if (def.id === 'pulso' && act.pulso) {
@@ -4256,6 +4513,860 @@
                 };
             }
         };
+
+
+        /* ===== MÓDULO FINANCIERO: COMPRAS, VENTAS, CT Y PRODUCTIVIDAD ECONÓMICA =====
+           Fuente: vistas y funciones de celotti_financiero.sql. Hoy se alimentan del Excel
+           Presupuesto_Costos_2026; cuando n8n traiga Odoo, esta parte no cambia. */
+
+        const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+        // $ 152.471.522 -> "$ 152,5 M" (para tarjetas)
+        function fmtMillones(v) {
+            const n = num(v);
+            if (n === null) return '--';
+            if (Math.abs(n) >= 1e6) return `$ ${(n / 1e6).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`;
+            return fmtMoneda(n);
+        }
+
+        function sumar(lista, campo) {
+            return lista.reduce((a, x) => a + (num(x[campo]) || 0), 0);
+        }
+
+        function ctMin() {
+            return num(cacheFin.ct?.ct_min);
+        }
+
+        // Costo de transformación de una cantidad de minutos-persona
+        function pesos(minutos) {
+            const m = num(minutos), ct = ctMin();
+            return m === null || ct === null ? null : m * ct;
+        }
+
+        // Ciclo promedio (minutos de 1 persona) de los moldes planificados del equipo
+        function cicloPromedio(equipo) {
+            const l = cacheMoldesPlanificacion.filter(m => estadoSI(m.Estado) && num(m.ciclo_min) > 0 && (equipo === 'PLANTA' || m.Equipo === equipo));
+            return l.length ? sumar(l, 'ciclo_min') / l.length : null;
+        }
+
+        async function cargarFin(anio, forzar = false) {
+            if (!forzar && cacheFin.anio === anio && cacheFin.cargadoEn && (Date.now() - cacheFin.cargadoEn) < 5 * 60000) return cacheFin;
+
+            const hoy = new Date();
+            const mesAnt = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+
+            const [ct, ctAnt, prod, mensual, cats] = await Promise.all([
+                jsonSeguro(fetchRpc('fn_ct', { p_fecha: fechaLocalISO(hoy) }), 'fn_ct'),
+                jsonSeguro(fetchRpc('fn_ct', { p_fecha: fechaLocalISO(mesAnt) }), 'fn_ct anterior'),
+                jsonSeguro(fetchRpc('fn_fin_productividad', { p_anio: anio }), 'fn_fin_productividad'),
+                jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/vista_fin_mensual?select=*&anio=eq.${anio}&order=mes.asc,orden.asc`, { headers: SB_HEADERS }), 'vista_fin_mensual'),
+                jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/fin_categorias?select=*&order=orden.asc`, { headers: SB_HEADERS }), 'fin_categorias')
+            ]);
+
+            cacheFin = {
+                anio,
+                ct: ct[0] || null,
+                ctAnt: ctAnt[0] || null,
+                prod,
+                mensual,
+                categorias: cats,
+                cargadoEn: Date.now()
+            };
+            return cacheFin;
+        }
+
+        function finSinDatos() {
+            return !cacheFin.mensual.length && !cacheFin.ct;
+        }
+
+        function avisoSinFin() {
+            return `<div class="estado-vacio">⚠️ No hay datos financieros. Ejecutá <code>celotti_financiero.sql</code> en el SQL Editor de Supabase y recargá la app.</div>`;
+        }
+
+        // Último mes cerrado con costos cargados
+        function ultimoMesCerrado() {
+            const l = cacheFin.prod.filter(p => p.mes_cerrado && num(p.costo_total) > 0).map(p => p.mes);
+            return l.length ? Math.max(...l) : null;
+        }
+
+        // Acumulado presupuesto vs real. El presupuesto comparable es solo el de los meses con real cargado.
+        function finAcumulado(hasta, clase = 'TODAS') {
+            const filas = cacheFin.mensual.filter(r => r.mes <= hasta && (clase === 'TODAS' || r.clasificacion === clase));
+            const conReal = filas.filter(r => r.real !== null && r.real !== undefined);
+            const mesesConReal = new Set(conReal.map(r => r.mes));
+            const pptoComparable = sumar(filas.filter(r => mesesConReal.has(r.mes)), 'presupuesto');
+            const real = sumar(conReal, 'real');
+            const pptoAnio = sumar(cacheFin.mensual.filter(r => clase === 'TODAS' || r.clasificacion === clase), 'presupuesto');
+            const pptoRestante = sumar(cacheFin.mensual.filter(r => !mesesConReal.has(r.mes) && r.mes > hasta && (clase === 'TODAS' || r.clasificacion === clase)), 'presupuesto')
+                + sumar(filas.filter(r => !mesesConReal.has(r.mes)), 'presupuesto');
+            return {
+                ppto: pptoComparable,
+                real,
+                variacion: real - pptoComparable,
+                ejecucion: pptoComparable ? real / pptoComparable : null,
+                pptoAnio,
+                proyeccion: real + pptoRestante,
+                meses: mesesConReal.size
+            };
+        }
+
+        // Indicadores económicos de un mes (para las tarjetas y para el "período anterior")
+        function indicadoresFin(mesRef, ct) {
+            if (!mesRef) return { ct, mes: null };
+            const p = cacheFin.prod.find(x => x.mes === mesRef) || {};
+            const acum = finAcumulado(mesRef);
+            return {
+                ct,
+                mes: mesRef,
+                prod: p,
+                ejecucion: acum.ejecucion,
+                acum,
+                costo_molde: ratio(p.costo_total, p.moldes_llenados),
+                sueldo_molde: ratio(p.sueldos, p.moldes_llenados),
+                ventas_sueldo: ratio(p.ventas, p.sueldos),
+                cemento_sueldo: ratio(p.cemento_monto, p.sueldos)
+            };
+        }
+
+        // Pérdida por ineficiencia de un equipo: minutos disponibles no convertidos en moldes × CT
+        function perdidaEquipo(e, d) {
+            if (!e) return null;
+            const ct = num(d?.fin?.ct?.ct_min) ?? ctMin();
+            const disp = num(e.min_disponibles), gan = num(e.min_ganados) || 0;
+            if (disp === null || ct === null || !disp) return null;
+            return Math.max(0, disp - gan) * ct;
+        }
+
+        // Costo de la no calidad: real si hay costo_estandar; si no, transformación invertida en piezas con defecto (estimado)
+        function costoNoCalidad(e) {
+            if (!e) return { valor: null, estimado: false };
+            if (e.copq != null) return { valor: num(e.copq), estimado: false };
+            const defectuosas = (parseInt(e.inspeccionadas) || 0) - (parseInt(e.sin_defecto) || 0);
+            const ciclo = cicloPromedio(e.equipo === 'Sin Asignar' ? 'PLANTA' : e.equipo);
+            const ct = ctMin();
+            if (!defectuosas || ciclo === null || ct === null) return { valor: null, estimado: true };
+            return { valor: defectuosas * ciclo * ct, estimado: true };
+        }
+
+        function abrirDrill(key, ...args) {
+            drillStack = [];
+            document.getElementById('modal-kpi-origen').style.display = 'flex';
+            irDrill(key, ...args);
+        }
+
+        function llenarSelectAnios(id) {
+            const sel = document.getElementById(id);
+            if (sel.options.length) return;
+            const actual = new Date().getFullYear();
+            for (let a = actual; a >= actual - 3; a--) sel.add(new Option(String(a), String(a)));
+        }
+
+        // Barras agrupadas presupuesto vs real por mes (clic en un mes = drill)
+        function graficoMeses(filasMes, accion) {
+            const max = Math.max(1, ...filasMes.map(f => Math.max(f.ppto || 0, f.real || 0)));
+            const W = 720, H = 190, base = 160, anchoGrupo = W / 12, barra = anchoGrupo * 0.32;
+            const barras = filasMes.map((f, i) => {
+                const x = i * anchoGrupo + anchoGrupo * 0.15;
+                const hP = (f.ppto || 0) / max * 140;
+                const hR = (f.real || 0) / max * 140;
+                const colorReal = f.real === null ? 'transparent' : (f.real > (f.ppto || 0) * 1.05 ? 'var(--danger)' : 'var(--accent-teal)');
+                return `
+                    <g style="cursor: pointer;" onclick="${accion(f.mes)}">
+                        <title>${MESES_LARGO[f.mes - 1]}: presupuesto ${fmtMoneda(f.ppto)} · real ${f.real === null ? 'sin cargar' : fmtMoneda(f.real)}</title>
+                        <rect x="${i * anchoGrupo}" y="0" width="${anchoGrupo}" height="${H}" fill="transparent"></rect>
+                        <rect x="${x}" y="${base - hP}" width="${barra}" height="${hP}" rx="2" fill="rgba(59, 130, 246, 0.55)"></rect>
+                        <rect x="${x + barra + 2}" y="${base - hR}" width="${barra}" height="${hR}" rx="2" fill="${colorReal}"></rect>
+                        <text x="${i * anchoGrupo + anchoGrupo / 2}" y="${base + 16}" text-anchor="middle">${MESES_CORTO[f.mes - 1]}</text>
+                    </g>`;
+            }).join('');
+            return `
+                <svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width: 520px; max-height: 230px;" role="img" aria-label="Presupuesto vs real por mes">
+                    <line x1="0" y1="${base}" x2="${W}" y2="${base}" stroke="var(--border-color)"></line>
+                    ${barras}
+                </svg>
+                <div class="leyenda">
+                    <span style="--c: rgba(59, 130, 246, 0.55);">Presupuesto</span>
+                    <span style="--c: var(--accent-teal);">Real dentro del presupuesto (hasta +5%)</span>
+                    <span style="--c: var(--danger);">Real por encima del presupuesto</span>
+                </div>`;
+        }
+
+        function colorEjecucion(e) {
+            if (e === null || e === undefined) return 'var(--text-muted)';
+            if (e > 1.05) return 'var(--danger)';
+            if (e >= 0.9) return 'var(--accent-teal)';
+            return 'var(--warning)';
+        }
+
+        /* --- SOLAPA COMPRAS --- */
+
+        async function cargarComprasData() {
+            llenarSelectAnios('filtro-fin-anio');
+            const anio = parseInt(document.getElementById('filtro-fin-anio').value) || new Date().getFullYear();
+            document.getElementById('compras-tarjetas').innerHTML = '<p style="color: var(--text-muted);">Cargando egresos y presupuesto...</p>';
+
+            try {
+                await cargarFin(anio, true);
+                if (!cacheMoldesPlanificacion.length) {
+                    cacheMoldesPlanificacion = await jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/planificacion_moldes?select=*`, { headers: SB_HEADERS }), 'planificacion_moldes');
+                }
+
+                // "Acumulado hasta": por defecto el último mes cerrado
+                const selHasta = document.getElementById('filtro-fin-hasta');
+                const previo = selHasta.value;
+                selHasta.innerHTML = MESES_LARGO.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
+                selHasta.value = previo || String(ultimoMesCerrado() || new Date().getMonth() + 1);
+
+                renderizarCompras();
+                renderizarMateriaPrima(anio);
+            } catch (err) {
+                console.error('Error cargando compras:', err);
+                document.getElementById('compras-tarjetas').innerHTML = `<p style="color: var(--danger);">❌ ${err.message}</p>`;
+            }
+        }
+
+        function renderizarCompras() {
+            const cont = document.getElementById('compras-tarjetas');
+            if (finSinDatos()) {
+                cont.innerHTML = avisoSinFin();
+                ['compras-grafico', 'compras-meses', 'compras-categorias'].forEach(id => document.getElementById(id).innerHTML = '');
+                return;
+            }
+
+            const anio = cacheFin.anio;
+            const hasta = parseInt(document.getElementById('filtro-fin-hasta').value) || 12;
+            const clase = document.getElementById('filtro-fin-clase').value;
+            const ac = finAcumulado(hasta, clase);
+            const sueldos = finAcumulado(hasta, 'SUELDOS');
+            const total = finAcumulado(hasta, 'TODAS');
+            const ct = cacheFin.ct;
+            const origenes = [...new Set(cacheFin.mensual.flatMap(r => String(r.origenes || '').split('+')).filter(Boolean))];
+
+            document.getElementById('fin-info-origen').innerText =
+                `Fuente: ${origenes.length ? origenes.join(' + ') : 'sin registros'} · ${ac.meses} meses con real cargado. Hacé clic en cualquier número para llegar al registro de origen.`;
+
+            const tarjeta = (titulo, valor, sub, color, accion) => `
+                <div class="fin-card" style="border-top: 3px solid ${color};" onclick="${accion}">
+                    <div class="kpi-title">${titulo}</div>
+                    <div class="valor" style="color: ${color};">${valor}</div>
+                    <div class="kpi-sub">${sub}</div>
+                </div>`;
+
+            const accCats = llamada('abrirDrill', 'finCategorias', anio, hasta, clase);
+            cont.innerHTML = [
+                tarjeta('Real acumulado', fmtMillones(ac.real), `${ac.meses} meses · presupuesto ${fmtMillones(ac.ppto)}`, 'var(--text-main)', accCats),
+                tarjeta('Ejecución del presupuesto', fmtPct(ac.ejecucion), ac.variacion > 0 ? `${fmtMillones(ac.variacion)} por encima` : `${fmtMillones(-ac.variacion)} por debajo`, colorEjecucion(ac.ejecucion), accCats),
+                tarjeta('Proyección de cierre del año', fmtMillones(ac.proyeccion), `real + presupuesto restante · ppto anual ${fmtMillones(ac.pptoAnio)}`, ac.proyeccion > ac.pptoAnio ? 'var(--warning)' : 'var(--accent-teal)', accCats),
+                tarjeta('Sueldos / costo total', fmtPct(ratio(sueldos.real, total.real)), `${fmtMillones(sueldos.real)} de ${fmtMillones(total.real)}`, 'var(--blue-info)', llamada('abrirDrill', 'finCategoria', anio, 'SUELDOS TOTALES')),
+                tarjeta('Costo de Transformación', ct ? `${fmtMoneda(ct.ct_min)} /min` : '--', ct ? `${fmtMoneda(ct.ct_hora_fabrica)} por hora de fábrica · ${ct.operarios_directos} operarios` : 'sin datos', 'var(--gold)', `verDetalleKpi('ct')`)
+            ].join('');
+
+            // Mes a mes
+            const filasMes = Array.from({ length: 12 }, (_, i) => {
+                const mes = i + 1;
+                const l = cacheFin.mensual.filter(r => r.mes === mes && (clase === 'TODAS' || r.clasificacion === clase));
+                const conReal = l.filter(r => r.real !== null && r.real !== undefined);
+                return {
+                    mes,
+                    ppto: sumar(l, 'presupuesto'),
+                    real: conReal.length ? sumar(conReal, 'real') : null,
+                    obs: l.filter(r => r.observaciones).length,
+                    cerrado: l.some(r => r.mes_cerrado)
+                };
+            });
+            const accMes = mes => llamada('abrirDrill', 'finMes', anio, mes);
+            document.getElementById('compras-grafico').innerHTML = graficoMeses(filasMes, accMes);
+            document.getElementById('compras-meses').innerHTML = tablaDrill(
+                [
+                    ['Mes', f => `<strong>${MESES_LARGO[f.mes - 1]}</strong>${f.cerrado ? '' : ' <small style="color: var(--text-muted);">(abierto)</small>'}`],
+                    ['Presupuesto', f => fmtMoneda(f.ppto)],
+                    ['Real', f => f.real === null ? '<span style="color: var(--text-muted);">sin cargar</span>' : fmtMoneda(f.real)],
+                    ['Desvío', f => f.real === null ? '--' : `<span style="color: ${f.real > f.ppto ? 'var(--danger)' : 'var(--accent-teal)'};">${fmtMoneda(f.real - f.ppto)}</span>`],
+                    ['Ejecución', f => `<strong style="color: ${colorEjecucion(ratio(f.real, f.ppto))};">${fmtPct(ratio(f.real, f.ppto))}</strong>`],
+                    ['Observaciones', f => f.obs ? `📝 ${f.obs}` : '']
+                ],
+                filasMes,
+                f => accMes(f.mes)
+            );
+
+            // Por categoría
+            const cats = [...new Set(cacheFin.mensual.map(r => r.categoria))]
+                .map(cat => {
+                    const l = cacheFin.mensual.filter(r => r.categoria === cat && r.mes <= hasta);
+                    const conReal = l.filter(r => r.real !== null && r.real !== undefined);
+                    const meses = new Set(conReal.map(r => r.mes));
+                    const ppto = sumar(l.filter(r => meses.has(r.mes)), 'presupuesto');
+                    const real = sumar(conReal, 'real');
+                    return {
+                        categoria: cat,
+                        clasificacion: l[0]?.clasificacion || cacheFin.mensual.find(r => r.categoria === cat)?.clasificacion,
+                        orden: l[0]?.orden ?? 99,
+                        ppto, real,
+                        ejec: ratio(real, ppto),
+                        obs: l.filter(r => r.observaciones).length
+                    };
+                })
+                .filter(c => clase === 'TODAS' || c.clasificacion === clase)
+                .sort((a, b) => (b.real - b.ppto) - (a.real - a.ppto));
+
+            document.getElementById('compras-categorias').innerHTML = tablaDrillMarcada(
+                [
+                    ['Categoría', c => `<strong>${c.categoria}</strong>`],
+                    ['Clasificación', c => c.clasificacion],
+                    ['Presupuesto', c => fmtMoneda(c.ppto)],
+                    ['Real', c => fmtMoneda(c.real)],
+                    ['Desvío', c => `<span style="color: ${c.real > c.ppto ? 'var(--danger)' : 'var(--accent-teal)'};">${fmtMoneda(c.real - c.ppto)}</span>`],
+                    ['Ejecución', c => `<strong style="color: ${colorEjecucion(c.ejec)};">${fmtPct(c.ejec)}</strong>`],
+                    ['Obs.', c => c.obs ? `📝 ${c.obs}` : '']
+                ],
+                cats,
+                c => llamada('abrirDrill', 'finCategoria', anio, c.categoria),
+                c => c.ejec !== null && (c.ejec < 0.5 || c.ejec > 1.5)
+            );
+        }
+
+        // Igual que tablaDrill pero resalta las filas que cumplen "marcar"
+        function tablaDrillMarcada(columnas, filas, onclickFila, marcar) {
+            const html = tablaDrill(columnas, filas, onclickFila);
+            if (!filas.length) return html;
+            let i = 0;
+            return html.replace(/<tr class="fila-interactiva"/g, m => (marcar(filas[i++]) ? '<tr class="fila-interactiva fila-revisar"' : m));
+        }
+
+        async function renderizarMateriaPrima(anio) {
+            const cont = document.getElementById('compras-mp');
+            const desde = `${anio}-01-01`, hasta = `${anio}-12-31`;
+            const fam = await jsonSeguro(fetchRpc('fn_compras_mp_agrupadas', { p_desde: desde, p_hasta: hasta, p_por: 'familia' }), 'fn_compras_mp_agrupadas');
+
+            if (!fam.length) {
+                cont.innerHTML = `
+                    <div class="estado-vacio">
+                        Todavía no hay compras de materia prima cargadas: la planilla de presupuesto solo trae costos indirectos y sueldos.<br>
+                        Se cargan en la tabla <code>fin_compras_mp</code> (fecha, proveedor, insumo, familia CEMENTO / ARIDOS / HIERRO / ADITIVOS, kg, monto).
+                        Cuando el conector de n8n traiga las compras de Odoo, esta sección y los KPIs de cemento se activan solos.
+                    </div>`;
+                return;
+            }
+
+            const prod = cacheFin.prod;
+            const cementoKg = sumar(prod, 'cemento_kg');
+            const teorico = sumar(prod, 'cemento_teorico_kg');
+            const moldes = sumar(prod, 'moldes_llenados');
+            cont.innerHTML = statsHtml([
+                ['Compras de MP', fmtMillones(sumar(fam, 'monto'))],
+                ['Cemento comprado', cementoKg ? `${fmtNum(cementoKg / 1000, 1)} tn` : '--', 'var(--gold)'],
+                ['Cemento teórico consumido', teorico ? `${fmtNum(teorico / 1000, 1)} tn` : 'falta m3_hormigon', 'var(--blue-info)'],
+                ['kg de cemento por molde', fmtNum(ratio(cementoKg, moldes), 1)]
+            ]) + tablaDrill(
+                [
+                    ['Familia', f => `<strong>${f.clave}</strong>`],
+                    ['Renglones', f => f.renglones],
+                    ['Kg', f => fmtNum(f.kg, 0)],
+                    ['Monto', f => fmtMoneda(f.monto)],
+                    ['$ / kg', f => f.precio_kg != null ? fmtMoneda(f.precio_kg) : '--'],
+                    ['Última compra', f => fechaAR(f.ultima)]
+                ],
+                fam,
+                f => llamada('abrirDrill', 'mpDetalle', desde, hasta, 'familia', f.clave)
+            ) + '<p class="drill-hint">👆 Clic en una familia para ver cada compra. El cemento teórico usa planificacion_moldes.m3_hormigon × llenados × dosificación (fin_parametros).</p>';
+        }
+
+        /* --- SOLAPA VENTAS --- */
+
+        async function cargarVentasData() {
+            llenarSelectAnios('filtro-ven-anio');
+            const anio = parseInt(document.getElementById('filtro-ven-anio').value) || new Date().getFullYear();
+            document.getElementById('ventas-tarjetas').innerHTML = '<p style="color: var(--text-muted);">Cargando ventas...</p>';
+
+            const desde = `${anio}-01-01`, hasta = `${anio}-12-31`;
+            const [_, clientes, productos, cartera] = await Promise.all([
+                cargarFin(anio, true),
+                jsonSeguro(fetchRpc('fn_ventas_agrupadas', { p_desde: desde, p_hasta: hasta, p_por: 'cliente' }), 'ventas por cliente'),
+                jsonSeguro(fetchRpc('fn_ventas_agrupadas', { p_desde: desde, p_hasta: hasta, p_por: 'producto' }), 'ventas por producto'),
+                jsonSeguro(fetch(`${SUPABASE_URL}/rest/v1/ordenes_trabajo_pendientes?select=*`, { headers: SB_HEADERS }), 'ordenes_trabajo_pendientes')
+            ]);
+            cacheDemandaOdoo = cartera;
+
+            const prod = cacheFin.prod;
+            const ventas = sumar(prod, 'ventas');
+            const hayVentas = ventas > 0;
+            const conVentas = prod.filter(p => num(p.ventas) > 0);
+            const sueldosConVentas = sumar(conVentas, 'sueldos');
+            const costoConVentas = sumar(conVentas, 'costo_total');
+            const pendPzas = cartera.reduce((a, c) => a + (parseInt(c.cant_pendiente) || 0), 0);
+            const pendSO = new Set(cartera.filter(c => (parseInt(c.cant_pendiente) || 0) > 0).map(c => c.pedido_so)).size;
+
+            const tarjeta = (titulo, valor, sub, color, accion) => `
+                <div class="fin-card" style="border-top: 3px solid ${color};" ${accion ? `onclick="${accion}"` : ''}>
+                    <div class="kpi-title">${titulo}</div>
+                    <div class="valor" style="color: ${color};">${valor}</div>
+                    <div class="kpi-sub">${sub}</div>
+                </div>`;
+
+            document.getElementById('ventas-tarjetas').innerHTML = [
+                tarjeta('Ventas del año', hayVentas ? fmtMillones(ventas) : '--', hayVentas ? `${conVentas.length} meses con facturación` : 'sin ventas cargadas', 'var(--accent-teal)', hayVentas ? llamada('abrirDrill', 'ventasDetalle', desde, hasta, '', '') : ''),
+                tarjeta('Ventas por $ de sueldo', hayVentas ? `${fmtNum(ratio(ventas, sueldosConVentas), 2)} x` : '--', 'cuántos pesos se venden por cada peso de sueldo', 'var(--gold)', `verDetalleKpi('ventas_sueldo')`),
+                tarjeta('Ventas / costo de estructura', hayVentas ? `${fmtNum(ratio(ventas, costoConVentas), 2)} x` : '--', 'ventas sobre sueldos + indirectos + comercial + administración', 'var(--blue-info)', `verDetalleKpi('ventas_sueldo')`),
+                tarjeta('Cartera pendiente', `${pendPzas.toLocaleString('es-AR')} pzas`, `${pendSO} pedidos (SO) sin completar`, 'var(--warning)', `mostrarOrigenKpi('backlog')`)
+            ].join('');
+
+            document.getElementById('ventas-meses').innerHTML = tablaDrill(
+                [
+                    ['Mes', p => `<strong>${MESES_LARGO[p.mes - 1]}</strong>`],
+                    ['Ventas', p => num(p.ventas) ? fmtMoneda(p.ventas) : '<span style="color: var(--text-muted);">--</span>'],
+                    ['Costo total', p => fmtMoneda(p.costo_total)],
+                    ['Sueldos', p => fmtMoneda(p.sueldos)],
+                    ['Ventas / sueldo', p => fmtNum(ratio(p.ventas, p.sueldos), 2)],
+                    ['Moldes llenados', p => p.moldes_llenados || '--'],
+                    ['$ venta / molde', p => fmtMoneda(ratio(p.ventas, p.moldes_llenados))]
+                ],
+                prod.filter(p => num(p.costo_total) || num(p.ventas) || parseInt(p.moldes_llenados)),
+                p => llamada('abrirDrill', 'prodMes', cacheFin.anio, p.mes),
+                'Sin datos para el año.'
+            ) + (hayVentas ? '' : `<div class="estado-vacio" style="margin-top: 10px;">Las ventas se cargan en <code>fin_ventas</code> (un renglón por línea de factura). El conector de n8n con Odoo (account.move.line de facturas de cliente) las completa; mientras tanto se ven costos y producción.</div>`);
+
+            const tablaAgrupada = (lista, campo, etiqueta) => lista.length
+                ? tablaDrill(
+                    [
+                        [etiqueta, x => `<strong>${x.clave}</strong>`],
+                        ['Comprob.', x => x.comprobantes],
+                        ['Cantidad', x => fmtNum(x.cantidad, 0)],
+                        ['Monto', x => fmtMoneda(x.monto)],
+                        ['% del total', x => fmtPct(ratio(x.monto, ventas))]
+                    ],
+                    lista.slice(0, 20),
+                    x => llamada('abrirDrill', 'ventasDetalle', desde, hasta, campo, x.clave)
+                )
+                : '<div class="estado-vacio">Sin ventas cargadas.</div>';
+
+            document.getElementById('ventas-clientes').innerHTML = tablaAgrupada(clientes, 'cliente', 'Cliente');
+            document.getElementById('ventas-productos').innerHTML = tablaAgrupada(productos, 'producto', 'Producto');
+
+            // Cartera pendiente por cliente
+            const porCliente = {};
+            cartera.filter(c => (parseInt(c.cant_pendiente) || 0) > 0).forEach(c => {
+                const k = c.cliente || 'Consumidor Final';
+                porCliente[k] = porCliente[k] || { cliente: k, piezas: 0, so: new Set(), renglones: 0 };
+                porCliente[k].piezas += parseInt(c.cant_pendiente) || 0;
+                porCliente[k].so.add(c.pedido_so);
+                porCliente[k].renglones++;
+            });
+            const listaCartera = Object.values(porCliente).sort((a, b) => b.piezas - a.piezas);
+            document.getElementById('ventas-cartera').innerHTML = tablaDrill(
+                [
+                    ['Cliente', c => `<strong>${c.cliente}</strong>`],
+                    ['Pedidos', c => c.so.size],
+                    ['Renglones', c => c.renglones],
+                    ['Piezas pendientes', c => `<strong style="color: var(--warning);">${c.piezas.toLocaleString('es-AR')}</strong>`]
+                ],
+                listaCartera,
+                c => llamada('abrirDrill', 'carteraCliente', c.cliente),
+                'No hay pedidos pendientes.'
+            ) + '<p class="drill-hint">👆 Clic en un cliente para ver sus pedidos y productos pendientes.</p>';
+        }
+
+        /* --- NIVELES DE DRILL-DOWN FINANCIEROS --- */
+
+        async function asegurarFin(anio) {
+            if (cacheFin.anio !== parseInt(anio)) await cargarFin(parseInt(anio), true);
+        }
+
+        Object.assign(DRILL, {
+
+            // Categorías acumuladas
+            async finCategorias(anio, hasta, clase) {
+                await asegurarFin(anio);
+                hasta = parseInt(hasta);
+                const ac = finAcumulado(hasta, clase);
+                const cats = [...new Set(cacheFin.mensual.map(r => r.categoria))].map(cat => {
+                    const l = cacheFin.mensual.filter(r => r.categoria === cat && r.mes <= hasta);
+                    const conReal = l.filter(r => r.real !== null && r.real !== undefined);
+                    const meses = new Set(conReal.map(r => r.mes));
+                    const ppto = sumar(l.filter(r => meses.has(r.mes)), 'presupuesto');
+                    const real = sumar(conReal, 'real');
+                    return { categoria: cat, clasificacion: l[0]?.clasificacion, ppto, real, ejec: ratio(real, ppto) };
+                }).filter(c => clase === 'TODAS' || c.clasificacion === clase)
+                  .sort((a, b) => (b.real - b.ppto) - (a.real - a.ppto));
+
+                const html = statsHtml([
+                    ['Presupuesto comparable', fmtMillones(ac.ppto), 'var(--blue-info)'],
+                    ['Real', fmtMillones(ac.real)],
+                    ['Desvío', fmtMillones(ac.variacion), ac.variacion > 0 ? 'var(--danger)' : 'var(--accent-teal)'],
+                    ['Ejecución', fmtPct(ac.ejecucion), colorEjecucion(ac.ejecucion)],
+                    ['Proyección de cierre', fmtMillones(ac.proyeccion), 'var(--warning)']
+                ]) + bloque('🗂️ Categorías, de mayor sobre-ejecución a mayor ahorro', tablaDrillMarcada(
+                    [
+                        ['Categoría', c => `<strong>${c.categoria}</strong>`],
+                        ['Clasificación', c => c.clasificacion],
+                        ['Presupuesto', c => fmtMoneda(c.ppto)],
+                        ['Real', c => fmtMoneda(c.real)],
+                        ['Desvío', c => fmtMoneda(c.real - c.ppto)],
+                        ['Ejecución', c => `<strong style="color: ${colorEjecucion(c.ejec)};">${fmtPct(c.ejec)}</strong>`]
+                    ],
+                    cats,
+                    c => llamada('irDrill', 'finCategoria', anio, c.categoria),
+                    c => c.ejec !== null && (c.ejec < 0.5 || c.ejec > 1.5)
+                ) + '<p class="drill-hint">El presupuesto comparable es solo el de los meses que ya tienen real cargado, para no comparar contra meses que todavía no pasaron.</p>');
+
+                return {
+                    miga: `🗂️ Categorías ${anio}`,
+                    titulo: `🛒 Egresos ${anio} · acumulado a ${MESES_LARGO[hasta - 1]}${clase !== 'TODAS' ? ' · ' + clase : ''}`,
+                    badge: 'vista_fin_mensual',
+                    html
+                };
+            },
+
+            // Un mes: todas las categorías
+            async finMes(anio, mes) {
+                await asegurarFin(anio);
+                mes = parseInt(mes);
+                const filas = cacheFin.mensual.filter(r => r.mes === mes).sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
+                const p = cacheFin.prod.find(x => x.mes === mes) || {};
+                const ppto = sumar(filas, 'presupuesto');
+                const real = sumar(filas.filter(r => r.real != null), 'real');
+
+                let html = statsHtml([
+                    ['Presupuesto', fmtMillones(ppto), 'var(--blue-info)'],
+                    ['Real', filas.some(r => r.real != null) ? fmtMillones(real) : 'sin cargar'],
+                    ['Ejecución', fmtPct(ratio(real, ppto)), colorEjecucion(ratio(real, ppto))],
+                    ['Mes', filas[0]?.mes_cerrado ? '🔒 cerrado' : '🔓 abierto'],
+                    ['Moldes llenados', p.moldes_llenados || '--'],
+                    ['Costo por molde', fmtMoneda(ratio(p.costo_total, p.moldes_llenados)), 'var(--gold)']
+                ]);
+
+                html += bloque(`🗂️ Categorías de ${MESES_LARGO[mes - 1]} ${anio}`, tablaDrillMarcada(
+                    [
+                        ['Categoría', r => `<strong>${r.categoria}</strong>`],
+                        ['Presupuesto', r => fmtMoneda(r.presupuesto)],
+                        ['Real', r => r.real == null ? '<span style="color: var(--text-muted);">sin cargar</span>' : fmtMoneda(r.real)],
+                        ['Desvío', r => r.real == null ? '--' : fmtMoneda(r.variacion)],
+                        ['Ejecución', r => `<strong style="color: ${colorEjecucion(num(r.ejecucion))};">${fmtPct(r.ejecucion)}</strong>`],
+                        ['Observaciones', r => r.observaciones ? `<small>📝 ${r.observaciones}</small>` : ''],
+                        ['Origen', r => r.origenes || '--']
+                    ],
+                    filas,
+                    r => llamada('irDrill', 'finRegistros', anio, mes, r.categoria),
+                    r => num(r.ejecucion) !== null && (num(r.ejecucion) < 0.5 || num(r.ejecucion) > 1.5)
+                ) + '<p class="drill-hint">👆 Clic en una categoría para ver los registros (hoy: el total de la planilla; con Odoo: cada factura).</p>');
+
+                return {
+                    miga: `📅 ${MESES_CORTO[mes - 1]} ${anio}`,
+                    titulo: `🛒 Egresos de ${MESES_LARGO[mes - 1]} ${anio}`,
+                    badge: 'vista_fin_mensual',
+                    html
+                };
+            },
+
+            // Una categoría: mes a mes
+            async finCategoria(anio, categoria) {
+                await asegurarFin(anio);
+                const filas = cacheFin.mensual.filter(r => r.categoria === categoria).sort((a, b) => a.mes - b.mes);
+                const cat = cacheFin.categorias.find(c => c.categoria === categoria) || {};
+                const conReal = filas.filter(r => r.real != null);
+                const ppto = sumar(filas.filter(r => r.real != null), 'presupuesto');
+                const real = sumar(conReal, 'real');
+
+                let html = `<p style="margin-top: 0; color: var(--text-muted);"><small>Clasificación ${cat.clasificacion || '--'} · cuentas ${(cat.cuentas || []).join(', ') || '--'} · ${cat.entra_en_ct === false ? 'no entra' : 'entra'} en el CT${cat.criterio_presupuesto ? ` · criterio del presupuesto: ${cat.criterio_presupuesto}` : ''}</small></p>`;
+                html += statsHtml([
+                    ['Presupuesto (meses con real)', fmtMillones(ppto), 'var(--blue-info)'],
+                    ['Real', fmtMillones(real)],
+                    ['Ejecución', fmtPct(ratio(real, ppto)), colorEjecucion(ratio(real, ppto))],
+                    ['Promedio mensual real', fmtMillones(conReal.length ? real / conReal.length : null)]
+                ]);
+                html += bloque('📅 Mes a mes', graficoMeses(filas.map(r => ({ mes: r.mes, ppto: num(r.presupuesto) || 0, real: r.real == null ? null : num(r.real) })), m => llamada('irDrill', 'finRegistros', anio, m, categoria)) +
+                    tablaDrill(
+                        [
+                            ['Mes', r => `<strong>${MESES_LARGO[r.mes - 1]}</strong>`],
+                            ['Presupuesto', r => fmtMoneda(r.presupuesto)],
+                            ['Real', r => r.real == null ? '<span style="color: var(--text-muted);">sin cargar</span>' : fmtMoneda(r.real)],
+                            ['Desvío', r => r.real == null ? '--' : fmtMoneda(r.variacion)],
+                            ['Ejecución', r => `<strong style="color: ${colorEjecucion(num(r.ejecucion))};">${fmtPct(r.ejecucion)}</strong>`],
+                            ['Observaciones', r => r.observaciones ? `<small>📝 ${r.observaciones}</small>` : '']
+                        ],
+                        filas,
+                        r => llamada('irDrill', 'finRegistros', anio, r.mes, categoria)
+                    ));
+
+                return {
+                    miga: `🗂️ ${categoria}`,
+                    titulo: `🛒 ${categoria} · ${anio}`,
+                    badge: 'vista_fin_mensual',
+                    html
+                };
+            },
+
+            // Registros de origen de una categoría en un mes
+            async finRegistros(anio, mes, categoria) {
+                mes = parseInt(mes);
+                const regs = await rpcRest(`vista_fin_gastos?select=*&anio=eq.${anio}&mes=eq.${mes}&categoria=eq.${encodeURIComponent(categoria)}&order=fecha.asc,monto.desc`);
+                const ppto = cacheFin.mensual.find(r => r.mes === mes && r.categoria === categoria)?.presupuesto;
+                const total = sumar(regs, 'monto');
+
+                let html = statsHtml([
+                    ['Registros', regs.length],
+                    ['Total real', fmtMoneda(total)],
+                    ['Presupuesto', fmtMoneda(ppto), 'var(--blue-info)'],
+                    ['Desvío', fmtMoneda(ppto != null ? total - num(ppto) : null), total > num(ppto) ? 'var(--danger)' : 'var(--accent-teal)']
+                ]);
+                html += bloque('🧾 Registros de origen', tablaDrill(
+                    [
+                        ['Fecha', r => fechaAR(r.fecha)],
+                        ['Proveedor', r => r.proveedor || '--'],
+                        ['Descripción', r => r.descripcion || '--'],
+                        ['Comprobante', r => r.comprobante ? `<small>${r.comprobante}</small>` : '--'],
+                        ['Cuenta', r => r.cuenta ? `<code>${r.cuenta}</code>` : '--'],
+                        ['Monto', r => `<strong>${fmtMoneda(r.monto)}</strong>`],
+                        ['Observaciones', r => r.observaciones ? `<small>📝 ${r.observaciones}</small>` : ''],
+                        ['Origen', r => `<span class="fuente-tag ${r.origen === 'ODOO' ? 'fuente-rfid' : 'fuente-historico'}">${r.origen}</span>`]
+                    ],
+                    regs, null, 'No hay registros para este mes y categoría.'
+                ) + (regs.some(r => r.origen === 'EXCEL')
+                    ? '<p class="drill-hint">Origen EXCEL = total mensual de la planilla Presupuesto_Costos_2026. Cuando n8n cargue Odoo, acá aparece cada factura con su proveedor y comprobante.</p>'
+                    : ''));
+
+                return {
+                    miga: `🧾 ${MESES_CORTO[mes - 1]} · ${categoria}`,
+                    titulo: `🧾 ${categoria} · ${MESES_LARGO[mes - 1]} ${anio}`,
+                    badge: 'vista_fin_gastos',
+                    html
+                };
+            },
+
+            // Productividad económica de un mes
+            async prodMes(anio, mes) {
+                await asegurarFin(anio);
+                mes = parseInt(mes);
+                const p = cacheFin.prod.find(x => x.mes === mes) || {};
+                const ct = num(p.ct_min);
+
+                let html = statsHtml([
+                    ['Costo total', fmtMillones(p.costo_total)],
+                    ['Sueldos', fmtMillones(p.sueldos), 'var(--blue-info)'],
+                    ['Moldes llenados', p.moldes_llenados || '--', 'var(--accent-teal)'],
+                    ['Costo por molde', fmtMoneda(ratio(p.costo_total, p.moldes_llenados)), 'var(--gold)'],
+                    ['Sueldo por molde', fmtMoneda(ratio(p.sueldos, p.moldes_llenados))],
+                    ['CT del mes', ct !== null ? `${fmtMoneda(ct)} /min` : '--'],
+                    ['Ventas', num(p.ventas) ? fmtMillones(p.ventas) : '--'],
+                    ['Ventas / sueldo', fmtNum(ratio(p.ventas, p.sueldos), 2)],
+                    ['Cemento / sueldo', fmtNum(ratio(p.cemento_monto, p.sueldos), 2)]
+                ]);
+
+                const absorbido = num(p.min_ganados) !== null && ct !== null ? num(p.min_ganados) * ct : null;
+                html += bloque('⚖️ Absorción: cuánto del costo se convirtió en moldes al tiempo estándar', `
+                    <table class="table-teal" style="margin-top: 0;"><tbody>
+                        <tr><td>Minutos estándar ganados (ciclo_min × llenados)</td><td><strong>${fmtNum(p.min_ganados, 0)}</strong></td></tr>
+                        <tr><td>× CT del mes</td><td>${ct !== null ? fmtMoneda(ct) : '--'}</td></tr>
+                        <tr><td>= Costo absorbido por la producción</td><td><strong>${fmtMoneda(absorbido)}</strong></td></tr>
+                        <tr><td>Costo real que entra en el CT</td><td>${fmtMoneda(p.costo_ct)}</td></tr>
+                        <tr><td><strong>Absorción</strong></td><td><strong style="color: var(--accent-teal);">${fmtPct(ratio(absorbido, p.costo_ct))}</strong></td></tr>
+                    </tbody></table>
+                    <p class="drill-hint">Lo que no se absorbe es costo de estructura que no se convirtió en producto: paradas, ausencias, retrabajo o moldes sin ciclo_min cargado.</p>`);
+
+                html += bloque('🔎 Ver el origen', tablaDrill(
+                    [['Qué', x => `<strong>${x.t}</strong>`], ['Detalle', x => x.d]],
+                    [
+                        { k: 'finMes', t: '🛒 Egresos del mes', d: 'Presupuesto vs real por categoría y sus registros' },
+                        { k: 'ventas', t: '💵 Ventas del mes', d: 'Cada renglón de factura' }
+                    ],
+                    x => x.k === 'finMes'
+                        ? llamada('irDrill', 'finMes', anio, mes)
+                        : llamada('irDrill', 'ventasDetalle', `${anio}-${String(mes).padStart(2, '0')}-01`, fechaLocalISO(new Date(anio, mes, 0)), '', '')
+                ));
+
+                return {
+                    miga: `📅 ${MESES_CORTO[mes - 1]} ${anio}`,
+                    titulo: `💪 Productividad económica · ${MESES_LARGO[mes - 1]} ${anio}`,
+                    badge: 'fn_fin_productividad',
+                    html
+                };
+            },
+
+            // Renglones de venta
+            async ventasDetalle(desde, hasta, campo, valor) {
+                let filtro = `fecha=gte.${desde}&fecha=lte.${hasta}`;
+                if (campo === 'cliente') filtro += `&cliente=eq.${encodeURIComponent(valor)}`;
+                if (campo === 'producto') filtro += `&or=(producto.eq.${encodeURIComponent(valor)},codigo_odoo.eq.${encodeURIComponent(valor)})`;
+                const regs = await rpcRest(`fin_ventas?select=*&${filtro}&order=fecha.desc&limit=1000`);
+
+                const html = statsHtml([
+                    ['Renglones', regs.length],
+                    ['Comprobantes', new Set(regs.map(r => r.comprobante)).size],
+                    ['Monto neto', fmtMoneda(sumar(regs, 'monto_neto')), 'var(--accent-teal)']
+                ]) + bloque('🧾 Renglones de factura', tablaDrill(
+                    [
+                        ['Fecha', r => fechaAR(r.fecha)],
+                        ['Comprobante', r => r.comprobante || '--'],
+                        ['Cliente', r => r.cliente || '--'],
+                        ['Producto', r => r.producto || r.codigo_odoo || '--'],
+                        ['Cantidad', r => fmtNum(r.cantidad, 0)],
+                        ['Monto neto', r => `<strong>${fmtMoneda(r.monto_neto)}</strong>`],
+                        ['Origen', r => r.origen]
+                    ],
+                    regs, null, 'No hay ventas cargadas para este filtro.'
+                ) + (regs.length >= 1000 ? '<p class="drill-hint">Se muestran los primeros 1000 renglones.</p>' : ''));
+
+                return {
+                    miga: `💵 ${valor || 'Ventas'}`,
+                    titulo: `💵 Ventas ${fechaAR(desde)} → ${fechaAR(hasta)}${valor ? ' · ' + valor : ''}`,
+                    badge: 'fin_ventas',
+                    html
+                };
+            },
+
+            // Compras de materia prima
+            async mpDetalle(desde, hasta, campo, valor) {
+                let filtro = `fecha=gte.${desde}&fecha=lte.${hasta}`;
+                if (campo) filtro += `&${campo}=eq.${encodeURIComponent(valor)}`;
+                const regs = await rpcRest(`fin_compras_mp?select=*&${filtro}&order=fecha.desc&limit=1000`);
+
+                const html = statsHtml([
+                    ['Compras', regs.length],
+                    ['Kg', fmtNum(sumar(regs, 'kg'), 0)],
+                    ['Monto', fmtMoneda(sumar(regs, 'monto')), 'var(--gold)'],
+                    ['$ / kg promedio', fmtMoneda(ratio(sumar(regs.filter(r => num(r.kg) > 0), 'monto'), sumar(regs, 'kg')))]
+                ]) + bloque('🧾 Compras', tablaDrill(
+                    [
+                        ['Fecha', r => fechaAR(r.fecha)],
+                        ['Proveedor', r => r.proveedor || '--'],
+                        ['Insumo', r => r.insumo],
+                        ['Cantidad', r => `${fmtNum(r.cantidad, 1)} ${r.unidad || ''}`],
+                        ['Kg', r => fmtNum(r.kg, 0)],
+                        ['Monto', r => `<strong>${fmtMoneda(r.monto)}</strong>`],
+                        ['$ / kg', r => fmtMoneda(ratio(r.monto, r.kg))],
+                        ['Comprobante', r => r.comprobante || '--'],
+                        ['Origen', r => r.origen]
+                    ],
+                    regs, null, 'Sin compras para este filtro.'
+                ));
+
+                return {
+                    miga: `🧱 ${valor || 'Materia prima'}`,
+                    titulo: `🧱 Materia prima${valor ? ' · ' + valor : ''} · ${fechaAR(desde)} → ${fechaAR(hasta)}`,
+                    badge: 'fin_compras_mp',
+                    html
+                };
+            },
+
+            // Cartera pendiente de un cliente
+            async carteraCliente(cliente) {
+                const filas = cacheDemandaOdoo.filter(c => (c.cliente || 'Consumidor Final') === cliente && (parseInt(c.cant_pendiente) || 0) > 0);
+                const html = statsHtml([
+                    ['Pedidos', new Set(filas.map(f => f.pedido_so)).size],
+                    ['Piezas pendientes', sumar(filas, 'cant_pendiente').toLocaleString('es-AR'), 'var(--warning)']
+                ]) + bloque('📋 Renglones pendientes', tablaDrill(
+                    [
+                        ['Pedido SO', f => `<strong>${f.pedido_so || '--'}</strong>`],
+                        ['Producto', f => f.producto || '--'],
+                        ['Pendiente', f => `${f.cant_pendiente} pzas`],
+                        ['Orden de fabricación', f => f.orden_fabricacion_mo || '--']
+                    ],
+                    filas, null, 'Sin pendientes.'
+                ));
+                return { miga: `👤 ${cliente}`, titulo: `📋 Cartera pendiente · ${cliente}`, badge: 'ordenes_trabajo_pendientes (Odoo)', html };
+            }
+        });
+
+        // GET a una vista/tabla de Supabase que devuelve array (lanza el error con detalle)
+        async function rpcRest(ruta) {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, { headers: SB_HEADERS });
+            if (!res.ok) throw new Error(`${ruta.split('?')[0]} → Status ${res.status}: ${await res.text()}`);
+            const data = await res.json();
+            return Array.isArray(data) ? data : [];
+        }
+
+        // Bloques extra del nivel 1 para los KPIs financieros
+        function bloquesKpiFin(def) {
+            const ct = cacheFin.ct;
+            const anio = cacheFin.anio;
+            let html = '';
+
+            if (def.id === 'ct') {
+                if (!ct) return avisoSinFin();
+                const mesesBase = [...new Set(cacheFin.mensual.filter(r => r.mes_cerrado && r.entra_en_ct && r.real != null).map(r => r.mes))].sort((a, b) => a - b);
+                html += bloque('🧮 La cuenta, con los números de este mes', `
+                    <table class="table-teal" style="margin-top: 0;"><tbody>
+                        <tr><td>Costo promedio mensual (${ct.meses_base} meses cerrados: ${fechaAR(ct.base_desde).substring(3)} → ${fechaAR(ct.base_hasta).substring(3)})</td><td><strong>${fmtMoneda(ct.costo_base_mensual)}</strong></td></tr>
+                        <tr><td>÷ Horas fábrica del mes (${ct.dias_lun_jue} días lun-jue × 7,92 h + ${ct.dias_viernes} viernes × 6,92 h)</td><td>${fmtNum(ct.horas_fabrica_mes, 2)} h</td></tr>
+                        <tr><td>= Costo por hora de fábrica</td><td><strong>${fmtMoneda(ct.ct_hora_fabrica)}</strong></td></tr>
+                        <tr><td>÷ Operarios directos (fin_parametros)</td><td>${ct.operarios_directos}</td></tr>
+                        <tr><td>= Costo por hora de operario directo</td><td><strong>${fmtMoneda(ct.ct_hora_empleado)}</strong></td></tr>
+                        <tr><td>÷ 60</td><td></td></tr>
+                        <tr><td><strong>= Costo de transformación por minuto</strong></td><td><strong style="color: var(--gold); font-size: 1.1rem;">${fmtMoneda(ct.ct_min)}</strong></td></tr>
+                    </tbody></table>
+                    <p class="drill-hint">Los días hábiles salen de config_jornada y feriados: si un feriado del mes no está cargado, cambian las horas y el CT.</p>`);
+
+                const enPersonas = (ct.armadores_personas || 0) + (ct.llenadores_personas || 0) + (ct.terminadores_personas || 0);
+                html += bloque('👥 ¿Cuántos operarios directos hay?', `
+                    ${statsHtml([
+                        ['Parámetro del CT', ct.operarios_directos, 'var(--gold)'],
+                        ['Armadores (Personas)', ct.armadores_personas],
+                        ['Llenado / Gris (Personas)', ct.llenadores_personas],
+                        ['Terminadores de esos equipos', ct.terminadores_personas],
+                        ['Suma en Personas', enPersonas, enPersonas === num(ct.operarios_directos) ? 'var(--accent-teal)' : 'var(--warning)']
+                    ])}
+                    ${enPersonas !== num(ct.operarios_directos) ? `<div class="aviso-secuencia" style="margin-top: 8px;">La planilla usa ${ct.operarios_directos} operarios directos y en Personas hay ${enPersonas} activos en esos roles. Si alguien falta o sobra, el CT por minuto cambia: conviene que el equipo lo revise.</div>` : ''}`);
+
+                html += bloque('📅 Meses que forman la base del costo', tablaDrill(
+                    [
+                        ['Mes', m => `<strong>${MESES_LARGO[m - 1]} ${anio}</strong>`],
+                        ['Costo que entra en el CT', m => fmtMoneda(sumar(cacheFin.mensual.filter(r => r.mes === m && r.entra_en_ct && r.real != null), 'real'))],
+                        ['Sueldos', m => fmtMoneda(sumar(cacheFin.mensual.filter(r => r.mes === m && r.clasificacion === 'SUELDOS' && r.real != null), 'real'))],
+                        ['CT de ese mes', m => fmtMoneda(cacheFin.prod.find(p => p.mes === m)?.ct_min)]
+                    ],
+                    mesesBase,
+                    m => llamada('irDrill', 'finMes', anio, m),
+                    'No hay meses cerrados con costos.'
+                ) + '<p class="drill-hint">👆 Clic en un mes para ver qué categorías lo componen y sus registros.</p>');
+            }
+
+            if (def.id === 'presupuesto') {
+                const umc = ultimoMesCerrado() || 12;
+                html += bloque('🔎 Abrir el detalle', tablaDrill(
+                    [['Vista', x => `<strong>${x.t}</strong>`], ['Qué muestra', x => x.d]],
+                    [
+                        { k: 'cat', t: '🗂️ Por categoría', d: `Acumulado a ${MESES_LARGO[umc - 1]}, de mayor sobre-ejecución a mayor ahorro` },
+                        ...cacheFin.prod.filter(p => p.mes_cerrado).map(p => ({ k: p.mes, t: `📅 ${MESES_LARGO[p.mes - 1]}`, d: `Real ${fmtMillones(p.costo_total)} · ppto ${fmtMillones(p.presupuesto_total)} · ${fmtPct(ratio(p.costo_total, p.presupuesto_total))}` }))
+                    ],
+                    x => x.k === 'cat' ? llamada('irDrill', 'finCategorias', anio, umc, 'TODAS') : llamada('irDrill', 'finMes', anio, x.k)
+                ));
+            }
+
+            if (['costo_molde', 'ventas_sueldo', 'cemento'].includes(def.id)) {
+                const filas = cacheFin.prod.filter(p => num(p.costo_total) || num(p.ventas) || parseInt(p.moldes_llenados));
+                const cols = {
+                    costo_molde: [
+                        ['Costo total', p => fmtMoneda(p.costo_total)],
+                        ['Moldes llenados', p => p.moldes_llenados || '--'],
+                        ['Costo / molde', p => `<strong>${fmtMoneda(ratio(p.costo_total, p.moldes_llenados))}</strong>`],
+                        ['Sueldo / molde', p => fmtMoneda(ratio(p.sueldos, p.moldes_llenados))],
+                        ['Absorción', p => fmtPct(ratio((num(p.min_ganados) || 0) * (num(p.ct_min) || 0), p.costo_ct))]
+                    ],
+                    ventas_sueldo: [
+                        ['Ventas', p => fmtMoneda(p.ventas)],
+                        ['Sueldos', p => fmtMoneda(p.sueldos)],
+                        ['Ventas / sueldo', p => `<strong>${fmtNum(ratio(p.ventas, p.sueldos), 2)}</strong>`],
+                        ['Ventas / costo total', p => fmtNum(ratio(p.ventas, p.costo_total), 2)]
+                    ],
+                    cemento: [
+                        ['Cemento $', p => fmtMoneda(p.cemento_monto)],
+                        ['Cemento kg', p => fmtNum(p.cemento_kg, 0)],
+                        ['Teórico kg', p => fmtNum(p.cemento_teorico_kg, 0)],
+                        ['Sueldos', p => fmtMoneda(p.sueldos)],
+                        ['Cemento $ / sueldo $', p => `<strong>${fmtNum(ratio(p.cemento_monto, p.sueldos), 2)}</strong>`],
+                        ['kg / molde', p => fmtNum(ratio(p.cemento_kg, p.moldes_llenados), 1)]
+                    ]
+                }[def.id];
+                html += bloque(`📅 Mes a mes ${anio}`, tablaDrill(
+                    [['Mes', p => `<strong>${MESES_LARGO[p.mes - 1]}</strong>${p.mes_cerrado ? '' : ' <small style="color: var(--text-muted);">(abierto)</small>'}`], ...cols],
+                    filas,
+                    p => llamada('irDrill', 'prodMes', anio, p.mes),
+                    'Sin datos para el año.'
+                ) + '<p class="drill-hint">👆 Clic en un mes para ver costos, producción, absorción y llegar a los registros.</p>');
+            }
+
+            return html;
+        }
 
         async function guardarMetaKpi(id) {
             const def = KPI_TEAL.find(k => k.id === id);
